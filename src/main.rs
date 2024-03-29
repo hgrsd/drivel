@@ -1,3 +1,10 @@
+use drivel::infer_schema;
+
 fn main() {
-    println!("Hello, world!");
+    let stdin = std::io::stdin();
+    let parsed: serde_json::Value =
+        serde_json::from_reader(stdin).expect("Unable to parse input JSON");
+    let schema = infer_schema(&parsed);
+
+    println!("{:?}", schema);
 }

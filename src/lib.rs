@@ -50,11 +50,11 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         (
             SchemaState::Object {
                 required: mut first_required,
-                optional: first_optional,
+                optional: mut first_optional,
             },
             SchemaState::Object {
                 required: mut second_required,
-                optional: second_optional,
+                optional: mut second_optional,
             },
         ) => {
             let required_keys: std::collections::HashSet<String> = first_required
@@ -63,7 +63,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 .cloned()
                 .collect();
 
-            let optional_keys: Vec<String> = first_optional
+            let optional_keys: std::collections::HashSet<String> = first_optional
                 .keys()
                 .chain(second_optional.keys())
                 .chain(
@@ -92,8 +92,12 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             let optional: std::collections::HashMap<String, SchemaState> = optional_keys
                 .iter()
                 .map(|k| {
-                    let first = first_required.remove(k);
-                    let second = second_required.remove(k);
+                    let first = first_required
+                        .remove(k)
+                        .or_else(|| first_optional.remove(k));
+                    let second = second_required
+                        .remove(k)
+                        .or_else(|| second_optional.remove(k));
                     let merged = if first.is_some() && second.is_some() {
                         merge(first.unwrap(), second.unwrap())
                     } else {
