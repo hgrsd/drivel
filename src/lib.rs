@@ -2,12 +2,12 @@
 extern crate lazy_static;
 
 lazy_static! {
-    static ref IsoDateRegex: regex::Regex = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    static ref IsoDateTimeRegex: regex::Regex = regex::Regex::new(
+    static ref ISO_DATE_REGEX: regex::Regex = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+    static ref ISO_DATE_TIME_REGEX: regex::Regex = regex::Regex::new(
         r"^\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-5]\d|Z)$"
     )
     .unwrap();
-    static ref UUIDRegex: regex::Regex =
+    static ref UUIDREGEX: regex::Regex =
         regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
             .unwrap();
 }
@@ -102,34 +102,34 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 .collect();
 
             let required: std::collections::HashMap<String, SchemaState> = required_keys
-                .iter()
+                .into_iter()
                 .map(|k| {
-                    let first = first_required.remove(k);
-                    let second = second_required.remove(k);
+                    let first = first_required.remove(&k);
+                    let second = second_required.remove(&k);
                     let merged = if first.is_some() && second.is_some() {
                         merge(first.unwrap(), second.unwrap())
                     } else {
                         first.unwrap_or(second.unwrap())
                     };
-                    (k.clone(), merged)
+                    (k, merged)
                 })
                 .collect();
 
             let optional: std::collections::HashMap<String, SchemaState> = optional_keys
-                .iter()
+                .into_iter()
                 .map(|k| {
                     let first = first_required
-                        .remove(k)
-                        .or_else(|| first_optional.remove(k));
+                        .remove(&k)
+                        .or_else(|| first_optional.remove(&k));
                     let second = second_required
-                        .remove(k)
-                        .or_else(|| second_optional.remove(k));
+                        .remove(&k)
+                        .or_else(|| second_optional.remove(&k));
                     let merged = if first.is_some() && second.is_some() {
                         merge(first.unwrap(), second.unwrap())
                     } else {
                         first.unwrap_or_else(|| second.unwrap())
                     };
-                    (k.clone(), merged)
+                    (k, merged)
                 })
                 .collect();
 
@@ -144,7 +144,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     }
 }
 
-fn infer_array_schema(values: &Vec<serde_json::Value>) -> SchemaState {
+fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
     values
         .iter()
         .map(infer_schema)
@@ -155,11 +155,11 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     match json {
         serde_json::Value::Null => SchemaState::Null,
         serde_json::Value::String(value) => {
-            let t = if IsoDateRegex.is_match(value) {
+            let t = if ISO_DATE_REGEX.is_match(value) {
                 StringType::IsoDate
-            } else if IsoDateTimeRegex.is_match(value) {
+            } else if ISO_DATE_TIME_REGEX.is_match(value) {
                 StringType::IsoDateTime
-            } else if UUIDRegex.is_match(value) {
+            } else if UUIDREGEX.is_match(value) {
                 StringType::UUID
             } else {
                 StringType::Unknown
