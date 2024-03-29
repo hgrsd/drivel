@@ -1,11 +1,31 @@
-use serde::Serialize;
+#[macro_use]
+extern crate lazy_static;
 
-#[derive(PartialEq, Eq, Debug, Serialize)]
+lazy_static! {
+    static ref IsoDateRegex: regex::Regex = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+    static ref IsoDateTimeRegex: regex::Regex = regex::Regex::new(
+        r"^\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-5]\d|Z)$"
+    )
+    .unwrap();
+    static ref UUIDRegex: regex::Regex =
+        regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            .unwrap();
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum StringType {
+    Unknown,
+    IsoDate,
+    IsoDateTime,
+    UUID,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub enum SchemaState {
     Initial,
     Null,
     Nullable(Box<SchemaState>),
-    String,
+    String(StringType),
     Number {
         float: bool,
     },
@@ -21,7 +41,7 @@ pub enum SchemaState {
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     match (initial, new) {
         (SchemaState::Initial, SchemaState::Null) => SchemaState::Null,
-        (SchemaState::Initial, SchemaState::String) => SchemaState::String,
+        (SchemaState::Initial, SchemaState::String(x)) => SchemaState::String(x),
         (SchemaState::Initial, SchemaState::Boolean) => SchemaState::Boolean,
         (SchemaState::Initial, SchemaState::Number { float }) => SchemaState::Number { float },
         (SchemaState::Initial, SchemaState::Array(inner)) => SchemaState::Array(inner),
@@ -29,7 +49,13 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             SchemaState::Object { required, optional }
         }
 
-        (SchemaState::String, SchemaState::String) => SchemaState::String,
+        (SchemaState::String(first_type), SchemaState::String(second_type)) => {
+            SchemaState::String(if first_type == second_type {
+                first_type
+            } else {
+                StringType::Unknown
+            })
+        }
 
         (SchemaState::Number { float: true }, SchemaState::Number { float: _ }) => {
             SchemaState::Number { float: true }
@@ -128,7 +154,18 @@ fn infer_array_schema(values: &Vec<serde_json::Value>) -> SchemaState {
 pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     match json {
         serde_json::Value::Null => SchemaState::Null,
-        serde_json::Value::String(_) => SchemaState::String,
+        serde_json::Value::String(value) => {
+            let t = if IsoDateRegex.is_match(value) {
+                StringType::IsoDate
+            } else if IsoDateTimeRegex.is_match(value) {
+                StringType::IsoDateTime
+            } else if UUIDRegex.is_match(value) {
+                StringType::UUID
+            } else {
+                StringType::Unknown
+            };
+            SchemaState::String(t)
+        }
         serde_json::Value::Number(n) => SchemaState::Number { float: n.is_f64() },
         serde_json::Value::Bool(_) => SchemaState::Boolean,
         serde_json::Value::Array(array) => SchemaState::Array(Box::new(infer_array_schema(array))),
@@ -157,11 +194,35 @@ mod tests {
     }
 
     #[test]
-    fn infers_string() {
+    fn infers_string_unknown_type() {
         let input = json!("foo");
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::String)
+        assert_eq!(schema, SchemaState::String(StringType::Unknown))
+    }
+
+    #[test]
+    fn infers_string_iso_date() {
+        let input = json!("2013-01-12");
+        let schema = infer_schema(&input);
+
+        assert_eq!(schema, SchemaState::String(StringType::IsoDate))
+    }
+
+    #[test]
+    fn infers_string_iso_date_time() {
+        let input = json!("2013-01-12T00:00:00.000Z");
+        let schema = infer_schema(&input);
+
+        assert_eq!(schema, SchemaState::String(StringType::IsoDateTime))
+    }
+
+    #[test]
+    fn infers_string_uuid() {
+        let input = json!("988c2c6d-df1b-4bb9-b837-6ba706c0b4ad");
+        let schema = infer_schema(&input);
+
+        assert_eq!(schema, SchemaState::String(StringType::UUID))
     }
 
     #[test]
@@ -215,13 +276,16 @@ mod tests {
             schema,
             SchemaState::Object {
                 required: std::collections::HashMap::from_iter([
-                    ("string".to_string(), SchemaState::String),
+                    (
+                        "string".to_string(),
+                        SchemaState::String(StringType::Unknown)
+                    ),
                     ("int".to_string(), SchemaState::Number { float: false }),
                     ("float".to_string(), SchemaState::Number { float: true }),
                     ("bool".to_string(), SchemaState::Boolean),
                     (
                         "array".to_string(),
-                        SchemaState::Array(Box::new(SchemaState::String))
+                        SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown)))
                     ),
                     ("null".to_string(), SchemaState::Null),
                     (
@@ -229,7 +293,7 @@ mod tests {
                         SchemaState::Object {
                             required: std::collections::HashMap::from_iter([(
                                 "string".to_owned(),
-                                SchemaState::String
+                                SchemaState::String(StringType::Unknown)
                             )]),
                             optional: std::collections::HashMap::new(),
                         }
@@ -253,7 +317,10 @@ mod tests {
         let input = json!(["foo", "bar"]);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Array(Box::new(SchemaState::String)));
+        assert_eq!(
+            schema,
+            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown)))
+        );
     }
 
     #[test]
@@ -313,7 +380,7 @@ mod tests {
                 ]),
                 optional: std::collections::HashMap::from_iter([(
                     "foo".to_owned(),
-                    SchemaState::String
+                    SchemaState::String(StringType::Unknown)
                 )])
             }))
         )
@@ -338,7 +405,7 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::Array(Box::new(SchemaState::Nullable(Box::new(
-                SchemaState::String
+                SchemaState::String(StringType::Unknown)
             ))))
         );
     }
