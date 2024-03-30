@@ -234,12 +234,12 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             SchemaState::Object { required, optional }
         }
 
-        // --- Null merging ---
+        // --- Null(able) merging ---
         (SchemaState::Null, SchemaState::Null) => SchemaState::Null,
-        (SchemaState::Null, s) => SchemaState::Nullable(Box::new(s)),
+        (SchemaState::Null, SchemaState::Nullable(inner))
+        | (SchemaState::Nullable(inner), SchemaState::Null) => SchemaState::Nullable(inner),
         (s, SchemaState::Null) => SchemaState::Nullable(Box::new(s)),
-
-        // --- Nullable merging ---
+        (SchemaState::Null, s) => SchemaState::Nullable(Box::new(s)),
         (SchemaState::Nullable(first_inner), SchemaState::Nullable(second_inner)) => {
             SchemaState::Nullable(Box::new(merge(*first_inner, *second_inner)))
         }
@@ -576,11 +576,14 @@ mod tests {
 
     #[test]
     fn infers_nullable_array() {
-        let input = json!(["foo", null]);
-        let schema = infer_schema(&input);
+        let input_1 = json!(["foo", null]);
+        let schema_1 = infer_schema(&input_1);
+
+        let input_2 = json!([null, "foo"]);
+        let schema_2 = infer_schema(&input_2);
 
         assert_eq!(
-            schema,
+            schema_1,
             SchemaState::Array(Box::new(SchemaState::Nullable(Box::new(
                 SchemaState::String(StringType::Unknown {
                     min_length: Some(3),
@@ -588,5 +591,7 @@ mod tests {
                 })
             ))))
         );
+
+        assert_eq!(schema_1, schema_2)
     }
 }
