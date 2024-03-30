@@ -5,7 +5,7 @@ use serde_json::Number;
 
 use crate::{NumberType, SchemaState, StringType};
 
-fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_json::Value {
+fn produce_inner(schema: &SchemaState, array_size: usize, depth: usize) -> serde_json::Value {
     match schema {
         SchemaState::Initial | SchemaState::Null => serde_json::Value::Null,
         SchemaState::Nullable(inner) => {
@@ -13,7 +13,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_j
             if should_return_null {
                 serde_json::Value::Null
             } else {
-                produce_inner(inner, repeat_n, depth + 1)
+                produce_inner(inner, array_size, depth + 1)
             }
         }
         SchemaState::String(string_type) => {
@@ -78,26 +78,26 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_j
             }
 
             let n = if depth == 0 {
-                repeat_n
+                array_size
             } else {
                 thread_rng().gen_range(0..=10)
             };
 
-            let data: Vec<_> = (0..=n)
-                .map(|_| produce_inner(array_type, repeat_n, depth + 1))
+            let data: Vec<_> = (0..n)
+                .map(|_| produce_inner(array_type, array_size, depth + 1))
                 .collect();
             serde_json::Value::Array(data)
         }
         SchemaState::Object { required, optional } => {
             let mut map = serde_json::Map::new();
             for (k, v) in required.iter() {
-                let value = produce_inner(v, repeat_n, depth + 1);
+                let value = produce_inner(v, array_size, depth + 1);
                 map.insert(k.clone(), value);
             }
             for (k, v) in optional.iter() {
                 let should_include: bool = random();
                 if should_include {
-                    let value = produce_inner(v, repeat_n, depth + 1);
+                    let value = produce_inner(v, array_size, depth + 1);
                     map.insert(k.clone(), value);
                 }
             }
@@ -107,6 +107,6 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_j
     }
 }
 
-pub fn produce(schema: &SchemaState, repeat_n: usize) -> serde_json::Value {
-    produce_inner(schema, repeat_n, 0)
+pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
+    produce_inner(schema, array_size, 0)
 }
