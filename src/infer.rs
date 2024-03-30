@@ -69,11 +69,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max_length,
             }),
             SchemaState::String(_),
-        ) => SchemaState::String(StringType::Unknown {
-            min_length,
-            max_length,
-        }),
-        (
+        )
+        | (
             SchemaState::String(_),
             SchemaState::String(StringType::Unknown {
                 min_length,
@@ -83,21 +80,15 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             min_length,
             max_length,
         }),
-        (SchemaState::String(StringType::UUID), SchemaState::String(StringType::UUID)) => {
-            SchemaState::String(StringType::UUID)
-        }
-        (SchemaState::String(StringType::IsoDate), SchemaState::String(StringType::IsoDate)) => {
-            SchemaState::String(StringType::IsoDate)
-        }
-        (
-            SchemaState::String(StringType::IsoDateTime),
-            SchemaState::String(StringType::IsoDateTime),
-        ) => SchemaState::String(StringType::IsoDateTime),
-        (SchemaState::String(_), SchemaState::String(_)) => {
-            SchemaState::String(StringType::Unknown {
-                min_length: None,
-                max_length: None,
-            })
+        (SchemaState::String(first_type), SchemaState::String(second_type)) => {
+            if first_type == second_type {
+                SchemaState::String(first_type)
+            } else {
+                SchemaState::String(StringType::Unknown {
+                    min_length: None,
+                    max_length: None,
+                })
+            }
         }
 
         // --- Number merging ---
@@ -471,6 +462,20 @@ mod tests {
             SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
                 min_length: Some(3),
                 max_length: Some(6)
+            })))
+        );
+    }
+
+    #[test]
+    fn infers_array_string_mixed() {
+        let input = json!(["48f41410-2d97-4d54-8bfa-aa4e22acca01", "barbar"]);
+        let schema = infer_schema(&input);
+
+        assert_eq!(
+            schema,
+            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
+                min_length: Some(6),
+                max_length: Some(6),
             })))
         );
     }
