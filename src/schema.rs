@@ -1,6 +1,9 @@
 #[derive(PartialEq, Debug)]
 pub enum StringType {
-    Unknown,
+    Unknown {
+        min_length: Option<usize>,
+        max_length: Option<usize>,
+    },
     IsoDate,
     IsoDateTime,
     UUID,

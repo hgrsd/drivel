@@ -29,6 +29,7 @@ fn max<T: PartialOrd>(left: T, right: T) -> T {
 
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     match (initial, new) {
+        // Initial state; merge with any state yields that state
         (SchemaState::Initial, SchemaState::Null) => SchemaState::Null,
         (SchemaState::Initial, SchemaState::String(x)) => SchemaState::String(x),
         (SchemaState::Initial, SchemaState::Boolean) => SchemaState::Boolean,
@@ -38,14 +39,76 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             SchemaState::Object { required, optional }
         }
 
-        (SchemaState::String(first_type), SchemaState::String(second_type)) => {
-            SchemaState::String(if first_type == second_type {
-                first_type
+        // --- String merging ---
+        (
+            SchemaState::String(StringType::Unknown {
+                min_length,
+                max_length,
+            }),
+            SchemaState::String(StringType::Unknown {
+                min_length: second_min_length,
+                max_length: second_max_length,
+            }),
+        ) => {
+            let min_length = if min_length.is_some() && second_min_length.is_some() {
+                Some(min(min_length.unwrap(), second_min_length.unwrap()))
+            } else if min_length.is_some() {
+                min_length
             } else {
-                StringType::Unknown
+                second_min_length
+            };
+
+            let max_length = if max_length.is_some() && second_max_length.is_some() {
+                Some(max(max_length.unwrap(), second_max_length.unwrap()))
+            } else if max_length.is_some() {
+                max_length
+            } else {
+                second_max_length
+            };
+
+            SchemaState::String(StringType::Unknown {
+                min_length,
+                max_length,
+            })
+        }
+        (
+            SchemaState::String(StringType::Unknown {
+                min_length,
+                max_length,
+            }),
+            SchemaState::String(_),
+        ) => SchemaState::String(StringType::Unknown {
+            min_length,
+            max_length,
+        }),
+        (
+            SchemaState::String(_),
+            SchemaState::String(StringType::Unknown {
+                min_length,
+                max_length,
+            }),
+        ) => SchemaState::String(StringType::Unknown {
+            min_length,
+            max_length,
+        }),
+        (SchemaState::String(StringType::UUID), SchemaState::String(StringType::UUID)) => {
+            SchemaState::String(StringType::UUID)
+        }
+        (SchemaState::String(StringType::IsoDate), SchemaState::String(StringType::IsoDate)) => {
+            SchemaState::String(StringType::IsoDate)
+        }
+        (
+            SchemaState::String(StringType::IsoDateTime),
+            SchemaState::String(StringType::IsoDateTime),
+        ) => SchemaState::String(StringType::IsoDateTime),
+        (SchemaState::String(_), SchemaState::String(_)) => {
+            SchemaState::String(StringType::Unknown {
+                min_length: None,
+                max_length: None,
             })
         }
 
+        // --- Number merging ---
         (
             SchemaState::Number(NumberType::Float {
                 min: first_min,
@@ -99,12 +162,15 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             max: max(first_max, second_max),
         }),
 
+        // --- Boolean merging ---
         (SchemaState::Boolean, SchemaState::Boolean) => SchemaState::Boolean,
 
+        // --- Array merging ---
         (SchemaState::Array(first_schema), SchemaState::Array(second_schema)) => {
             SchemaState::Array(Box::new(merge(*first_schema, *second_schema)))
         }
 
+        // --- Object merging ---
         (
             SchemaState::Object {
                 required: mut first_required,
@@ -168,10 +234,23 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             SchemaState::Object { required, optional }
         }
 
+        // --- Null merging ---
         (SchemaState::Null, SchemaState::Null) => SchemaState::Null,
         (SchemaState::Null, s) => SchemaState::Nullable(Box::new(s)),
         (s, SchemaState::Null) => SchemaState::Nullable(Box::new(s)),
 
+        // --- Nullable merging ---
+        (SchemaState::Nullable(first_inner), SchemaState::Nullable(second_inner)) => {
+            SchemaState::Nullable(Box::new(merge(*first_inner, *second_inner)))
+        }
+        (SchemaState::Nullable(first_inner), second) => {
+            SchemaState::Nullable(Box::new(merge(*first_inner, second)))
+        }
+        (first, SchemaState::Nullable(second_inner)) => {
+            SchemaState::Nullable(Box::new(merge(first, *second_inner)))
+        }
+
+        // --- Fallback ---
         _ => SchemaState::Indefinite,
     }
 }
@@ -194,7 +273,10 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
             } else if UUIDREGEX.is_match(value) {
                 StringType::UUID
             } else {
-                StringType::Unknown
+                StringType::Unknown {
+                    min_length: Some(value.len()),
+                    max_length: Some(value.len()),
+                }
             };
             SchemaState::String(t)
         }
@@ -240,7 +322,13 @@ mod tests {
         let input = json!("foo");
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::String(StringType::Unknown))
+        assert_eq!(
+            schema,
+            SchemaState::String(StringType::Unknown {
+                min_length: Some(3),
+                max_length: Some(3)
+            })
+        )
     }
 
     #[test]
@@ -329,7 +417,10 @@ mod tests {
                 required: std::collections::HashMap::from_iter([
                     (
                         "string".to_string(),
-                        SchemaState::String(StringType::Unknown)
+                        SchemaState::String(StringType::Unknown {
+                            min_length: Some(3),
+                            max_length: Some(3)
+                        })
                     ),
                     (
                         "int".to_string(),
@@ -345,7 +436,10 @@ mod tests {
                     ("bool".to_string(), SchemaState::Boolean),
                     (
                         "array".to_string(),
-                        SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown)))
+                        SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
+                            min_length: Some(3),
+                            max_length: Some(3)
+                        })))
                     ),
                     ("null".to_string(), SchemaState::Null),
                     (
@@ -353,7 +447,10 @@ mod tests {
                         SchemaState::Object {
                             required: std::collections::HashMap::from_iter([(
                                 "string".to_owned(),
-                                SchemaState::String(StringType::Unknown)
+                                SchemaState::String(StringType::Unknown {
+                                    min_length: Some(3),
+                                    max_length: Some(3)
+                                })
                             )]),
                             optional: std::collections::HashMap::new(),
                         }
@@ -374,12 +471,15 @@ mod tests {
 
     #[test]
     fn infers_array_string() {
-        let input = json!(["foo", "bar"]);
+        let input = json!(["foo", "barbar"]);
         let schema = infer_schema(&input);
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown)))
+            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
+                min_length: Some(3),
+                max_length: Some(6)
+            })))
         );
     }
 
@@ -430,7 +530,12 @@ mod tests {
             {
                 "baz": null,
                 "qux": false
-            }
+            },
+            {
+                "foo": "barbar",
+                "baz": 20,
+                "qux": true
+            },
         ]);
         let schema = infer_schema(&input);
 
@@ -442,14 +547,17 @@ mod tests {
                         "baz".to_owned(),
                         SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer {
                             min: 10,
-                            max: 10
+                            max: 20,
                         })))
                     ),
                     ("qux".to_owned(), SchemaState::Boolean),
                 ]),
                 optional: std::collections::HashMap::from_iter([(
                     "foo".to_owned(),
-                    SchemaState::String(StringType::Unknown)
+                    SchemaState::String(StringType::Unknown {
+                        min_length: Some(3),
+                        max_length: Some(6)
+                    })
                 )])
             }))
         )
@@ -474,7 +582,10 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::Array(Box::new(SchemaState::Nullable(Box::new(
-                SchemaState::String(StringType::Unknown)
+                SchemaState::String(StringType::Unknown {
+                    min_length: Some(3),
+                    max_length: Some(3)
+                })
             ))))
         );
     }

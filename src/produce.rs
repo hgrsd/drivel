@@ -30,7 +30,14 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
                     let uuid = uuid::Uuid::new_v4();
                     uuid.to_string()
                 }
-                StringType::Unknown => Faker.fake(),
+                StringType::Unknown {
+                    min_length,
+                    max_length,
+                } => {
+                    let min = min_length.unwrap_or(0);
+                    let max = max_length.unwrap_or(32);
+                    (min..max).fake()
+                }
             };
             serde_json::Value::String(value)
         }
