@@ -36,7 +36,13 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
                 } => {
                     let min = min_length.unwrap_or(0);
                     let max = max_length.unwrap_or(32);
-                    (min..max).fake()
+                    let range = min..max;
+                    if range.is_empty() {
+                        // range only empty if min == max
+                        min.fake()
+                    } else {
+                        (min..max).fake()
+                    }
                 }
             };
             serde_json::Value::String(value)
@@ -45,7 +51,8 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
             NumberType::Integer { min, max } => {
                 let range = min..max;
                 let number = if range.is_empty() {
-                    random()
+                    // range only empty if min == max
+                    min
                 } else {
                     thread_rng().gen_range(min..max)
                 };
@@ -54,7 +61,8 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
             NumberType::Float { min, max } => {
                 let range = min..max;
                 let number = if range.is_empty() {
-                    random()
+                    // range only empty if min == max
+                    min
                 } else {
                     thread_rng().gen_range(min..max)
                 };
