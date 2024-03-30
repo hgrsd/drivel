@@ -11,6 +11,22 @@ lazy_static! {
             .unwrap();
 }
 
+fn min<T: PartialOrd>(left: T, right: T) -> T {
+    if left < right {
+        left
+    } else {
+        right
+    }
+}
+
+fn max<T: PartialOrd>(left: T, right: T) -> T {
+    if left > right {
+        left
+    } else {
+        right
+    }
+}
+
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     match (initial, new) {
         (SchemaState::Initial, SchemaState::Null) => SchemaState::Null,
@@ -30,15 +46,58 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             })
         }
 
-        (SchemaState::Number(NumberType::Float), SchemaState::Number(_)) => {
-            SchemaState::Number(NumberType::Float)
-        }
-        (SchemaState::Number(_), SchemaState::Number(NumberType::Float)) => {
-            SchemaState::Number(NumberType::Float)
-        }
-        (SchemaState::Number(_), SchemaState::Number(_)) => {
-            SchemaState::Number(NumberType::Integer)
-        }
+        (
+            SchemaState::Number(NumberType::Float {
+                min: first_min,
+                max: first_max,
+            }),
+            SchemaState::Number(NumberType::Float {
+                min: second_min,
+                max: second_max,
+            }),
+        ) => SchemaState::Number(NumberType::Float {
+            min: min(first_min, second_min),
+            max: max(first_max, second_max),
+        }),
+        (
+            SchemaState::Number(NumberType::Float {
+                min: first_min,
+                max: first_max,
+            }),
+            SchemaState::Number(NumberType::Integer {
+                min: second_min,
+                max: second_max,
+            }),
+        ) => SchemaState::Number(NumberType::Float {
+            min: min(first_min, second_min as f64),
+            max: max(first_max, second_max as f64),
+        }),
+        (
+            SchemaState::Number(NumberType::Integer {
+                min: first_min,
+                max: first_max,
+            }),
+            SchemaState::Number(NumberType::Float {
+                min: second_min,
+                max: second_max,
+            }),
+        ) => SchemaState::Number(NumberType::Float {
+            min: min(first_min as f64, second_min),
+            max: max(first_max as f64, second_max),
+        }),
+        (
+            SchemaState::Number(NumberType::Integer {
+                min: first_min,
+                max: first_max,
+            }),
+            SchemaState::Number(NumberType::Integer {
+                min: second_min,
+                max: second_max,
+            }),
+        ) => SchemaState::Number(NumberType::Integer {
+            min: min(first_min, second_min),
+            max: max(first_max, second_max),
+        }),
 
         (SchemaState::Boolean, SchemaState::Boolean) => SchemaState::Boolean,
 
@@ -140,9 +199,15 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
             SchemaState::String(t)
         }
         serde_json::Value::Number(n) => SchemaState::Number(if n.is_f64() {
-            NumberType::Float
+            NumberType::Float {
+                min: n.as_f64().unwrap(),
+                max: n.as_f64().unwrap(),
+            }
         } else {
-            NumberType::Integer
+            NumberType::Integer {
+                min: n.as_i64().unwrap(),
+                max: n.as_i64().unwrap(),
+            }
         }),
         serde_json::Value::Bool(_) => SchemaState::Boolean,
         serde_json::Value::Array(array) => SchemaState::Array(Box::new(infer_array_schema(array))),
@@ -207,7 +272,10 @@ mod tests {
         let input = json!(42);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Number(NumberType::Integer))
+        assert_eq!(
+            schema,
+            SchemaState::Number(NumberType::Integer { min: 42, max: 42 })
+        )
     }
 
     #[test]
@@ -215,7 +283,13 @@ mod tests {
         let input = json!(42.0);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Number(NumberType::Float))
+        assert_eq!(
+            schema,
+            SchemaState::Number(NumberType::Float {
+                min: 42.0,
+                max: 42.0
+            })
+        )
     }
 
     #[test]
@@ -257,8 +331,17 @@ mod tests {
                         "string".to_string(),
                         SchemaState::String(StringType::Unknown)
                     ),
-                    ("int".to_string(), SchemaState::Number(NumberType::Integer)),
-                    ("float".to_string(), SchemaState::Number(NumberType::Float)),
+                    (
+                        "int".to_string(),
+                        SchemaState::Number(NumberType::Integer { min: 10, max: 10 })
+                    ),
+                    (
+                        "float".to_string(),
+                        SchemaState::Number(NumberType::Float {
+                            min: 10.4,
+                            max: 10.4
+                        })
+                    ),
                     ("bool".to_string(), SchemaState::Boolean),
                     (
                         "array".to_string(),
@@ -307,7 +390,10 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Integer)))
+            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Integer {
+                min: 100,
+                max: 104
+            })))
         );
     }
 
@@ -318,7 +404,10 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Float)))
+            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Float {
+                min: 100.0,
+                max: 104.5
+            })))
         );
     }
 
@@ -351,7 +440,10 @@ mod tests {
                 required: std::collections::HashMap::from_iter([
                     (
                         "baz".to_owned(),
-                        SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer)))
+                        SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer {
+                            min: 10,
+                            max: 10
+                        })))
                     ),
                     ("qux".to_owned(), SchemaState::Boolean),
                 ]),

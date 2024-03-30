@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use fake::{Fake, Faker};
-use rand::random;
+use rand::{random, thread_rng, Rng};
 use serde_json::Number;
 
 use crate::{NumberType, SchemaState, StringType};
@@ -35,10 +35,24 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
             serde_json::Value::String(value)
         }
         SchemaState::Number(number_type) => match *number_type {
-            NumberType::Integer => serde_json::Value::Number(Number::from(random::<i64>())),
-            NumberType::Float => serde_json::Value::Number(
-                Number::from_f64(random::<f64>() * random::<i32>() as f64).unwrap(),
-            ),
+            NumberType::Integer { min, max } => {
+                let range = min..max;
+                let number = if range.is_empty() {
+                    random()
+                } else {
+                    thread_rng().gen_range(min..max)
+                };
+                serde_json::Value::Number(Number::from(number))
+            }
+            NumberType::Float { min, max } => {
+                let range = min..max;
+                let number = if range.is_empty() {
+                    random()
+                } else {
+                    thread_rng().gen_range(min..max)
+                };
+                serde_json::Value::Number(Number::from_f64(number).unwrap())
+            }
         },
         SchemaState::Boolean => serde_json::Value::Bool(random()),
         SchemaState::Array(array_type) => {

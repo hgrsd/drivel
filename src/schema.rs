@@ -1,4 +1,4 @@
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown,
     IsoDate,
@@ -6,13 +6,13 @@ pub enum StringType {
     UUID,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum NumberType {
-    Integer,
-    Float,
+    Integer { min: i64, max: i64 },
+    Float { min: f64, max: f64 },
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum SchemaState {
     Initial,
     Null,
