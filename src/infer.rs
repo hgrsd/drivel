@@ -238,16 +238,16 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         (SchemaState::Null, SchemaState::Null) => SchemaState::Null,
         (SchemaState::Null, SchemaState::Nullable(inner))
         | (SchemaState::Nullable(inner), SchemaState::Null) => SchemaState::Nullable(inner),
-        (s, SchemaState::Null) => SchemaState::Nullable(Box::new(s)),
-        (SchemaState::Null, s) => SchemaState::Nullable(Box::new(s)),
+        (non_null_type, SchemaState::Null) => SchemaState::Nullable(Box::new(non_null_type)),
+        (SchemaState::Null, non_null_type) => SchemaState::Nullable(Box::new(non_null_type)),
         (SchemaState::Nullable(first_inner), SchemaState::Nullable(second_inner)) => {
             SchemaState::Nullable(Box::new(merge(*first_inner, *second_inner)))
         }
-        (SchemaState::Nullable(first_inner), second) => {
-            SchemaState::Nullable(Box::new(merge(*first_inner, second)))
+        (SchemaState::Nullable(inner), non_nullable_type) => {
+            SchemaState::Nullable(Box::new(merge(*inner, non_nullable_type)))
         }
-        (first, SchemaState::Nullable(second_inner)) => {
-            SchemaState::Nullable(Box::new(merge(first, *second_inner)))
+        (non_nullable_type, SchemaState::Nullable(inner)) => {
+            SchemaState::Nullable(Box::new(merge(non_nullable_type, *inner)))
         }
 
         // --- Fallback ---
