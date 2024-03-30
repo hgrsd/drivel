@@ -5,7 +5,7 @@ use serde_json::Number;
 
 use crate::{NumberType, SchemaState, StringType};
 
-pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
+fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_json::Value {
     match schema {
         SchemaState::Initial | SchemaState::Null => serde_json::Value::Null,
         SchemaState::Nullable(inner) => {
@@ -13,7 +13,7 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
             if should_return_null {
                 serde_json::Value::Null
             } else {
-                produce(inner, array_size)
+                produce_inner(inner, repeat_n, depth + 1)
             }
         }
         SchemaState::String(string_type) => {
@@ -54,7 +54,7 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
                     // range only empty if min == max
                     min
                 } else {
-                    thread_rng().gen_range(min..max)
+                    thread_rng().gen_range(min..=max)
                 };
                 serde_json::Value::Number(Number::from(number))
             }
@@ -64,7 +64,7 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
                     // range only empty if min == max
                     min
                 } else {
-                    thread_rng().gen_range(min..max)
+                    thread_rng().gen_range(min..=max)
                 };
                 serde_json::Value::Number(Number::from_f64(number).unwrap())
             }
@@ -77,21 +77,27 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
                 return serde_json::Value::Array(vec![]);
             }
 
-            let data: Vec<_> = (0..array_size)
-                .map(|_| produce(array_type, array_size))
+            let n = if depth == 0 {
+                repeat_n
+            } else {
+                thread_rng().gen_range(0..=10)
+            };
+
+            let data: Vec<_> = (0..=n)
+                .map(|_| produce_inner(array_type, repeat_n, depth + 1))
                 .collect();
             serde_json::Value::Array(data)
         }
         SchemaState::Object { required, optional } => {
             let mut map = serde_json::Map::new();
             for (k, v) in required.iter() {
-                let value = produce(v, array_size);
+                let value = produce_inner(v, repeat_n, depth + 1);
                 map.insert(k.clone(), value);
             }
             for (k, v) in optional.iter() {
                 let should_include: bool = random();
                 if should_include {
-                    let value = produce(v, array_size);
+                    let value = produce_inner(v, repeat_n, depth + 1);
                     map.insert(k.clone(), value);
                 }
             }
@@ -99,4 +105,8 @@ pub fn produce(schema: &SchemaState, array_size: usize) -> serde_json::Value {
         }
         SchemaState::Indefinite => serde_json::Value::Null,
     }
+}
+
+pub fn produce(schema: &SchemaState, repeat_n: usize) -> serde_json::Value {
+    produce_inner(schema, repeat_n, 0)
 }
