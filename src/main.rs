@@ -17,7 +17,7 @@ fn main() {
             serde_json::to_writer_pretty(stdout, &result).unwrap();
         },
         "describe" => {
-            println!("{:?}", &schema);
+            println!("{}", schema.to_string_pretty(0));
         }
         _ => println!("Invalid mode provided. Usage: drive [mode] <array_length>, where mode is in (describe, produce)")
     }
