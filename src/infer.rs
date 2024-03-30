@@ -63,6 +63,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max_length,
             })
         }
+
         (
             SchemaState::String(StringType::Unknown {
                 min_length,
@@ -80,6 +81,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             min_length,
             max_length,
         }),
+
         (SchemaState::String(first_type), SchemaState::String(second_type)) => {
             if first_type == second_type {
                 SchemaState::String(first_type)
@@ -105,6 +107,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             min: min(first_min, second_min),
             max: max(first_max, second_max),
         }),
+
         (
             SchemaState::Number(NumberType::Float {
                 min: first_min,
@@ -118,6 +121,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             min: min(first_min, second_min as f64),
             max: max(first_max, second_max as f64),
         }),
+
         (
             SchemaState::Number(NumberType::Integer {
                 min: first_min,
@@ -131,6 +135,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             min: min(first_min as f64, second_min),
             max: max(first_max as f64, second_max),
         }),
+
         (
             SchemaState::Number(NumberType::Integer {
                 min: first_min,
@@ -219,13 +224,17 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 
         // --- Null(able) merging ---
         (SchemaState::Null, SchemaState::Null) => SchemaState::Null,
+
         (SchemaState::Null, SchemaState::Nullable(inner))
         | (SchemaState::Nullable(inner), SchemaState::Null) => SchemaState::Nullable(inner),
+
         (non_null_type, SchemaState::Null) => SchemaState::Nullable(Box::new(non_null_type)),
         (SchemaState::Null, non_null_type) => SchemaState::Nullable(Box::new(non_null_type)),
+
         (SchemaState::Nullable(first_inner), SchemaState::Nullable(second_inner)) => {
             SchemaState::Nullable(Box::new(merge(*first_inner, *second_inner)))
         }
+
         (SchemaState::Nullable(inner), non_nullable_type) => {
             SchemaState::Nullable(Box::new(merge(*inner, non_nullable_type)))
         }
