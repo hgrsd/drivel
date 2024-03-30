@@ -29,15 +29,7 @@ fn max<T: PartialOrd>(left: T, right: T) -> T {
 
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     match (initial, new) {
-        // Initial state; merge with any state yields that state
-        (SchemaState::Initial, SchemaState::Null) => SchemaState::Null,
-        (SchemaState::Initial, SchemaState::String(x)) => SchemaState::String(x),
-        (SchemaState::Initial, SchemaState::Boolean) => SchemaState::Boolean,
-        (SchemaState::Initial, SchemaState::Number(x)) => SchemaState::Number(x),
-        (SchemaState::Initial, SchemaState::Array(inner)) => SchemaState::Array(inner),
-        (SchemaState::Initial, SchemaState::Object { required, optional }) => {
-            SchemaState::Object { required, optional }
-        }
+        (SchemaState::Initial, new) => new,
 
         // --- String merging ---
         (
