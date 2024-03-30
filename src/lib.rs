@@ -21,14 +21,18 @@ pub enum StringType {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+pub enum NumberType {
+    Integer,
+    Float,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub enum SchemaState {
     Initial,
     Null,
     Nullable(Box<SchemaState>),
     String(StringType),
-    Number {
-        float: bool,
-    },
+    Number(NumberType),
     Boolean,
     Array(Box<SchemaState>),
     Object {
@@ -43,7 +47,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         (SchemaState::Initial, SchemaState::Null) => SchemaState::Null,
         (SchemaState::Initial, SchemaState::String(x)) => SchemaState::String(x),
         (SchemaState::Initial, SchemaState::Boolean) => SchemaState::Boolean,
-        (SchemaState::Initial, SchemaState::Number { float }) => SchemaState::Number { float },
+        (SchemaState::Initial, SchemaState::Number(x)) => SchemaState::Number(x),
         (SchemaState::Initial, SchemaState::Array(inner)) => SchemaState::Array(inner),
         (SchemaState::Initial, SchemaState::Object { required, optional }) => {
             SchemaState::Object { required, optional }
@@ -57,14 +61,14 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
             })
         }
 
-        (SchemaState::Number { float: true }, SchemaState::Number { float: _ }) => {
-            SchemaState::Number { float: true }
+        (SchemaState::Number(NumberType::Float), SchemaState::Number(_)) => {
+            SchemaState::Number(NumberType::Float)
         }
-        (SchemaState::Number { float: _ }, SchemaState::Number { float: true }) => {
-            SchemaState::Number { float: true }
+        (SchemaState::Number(_), SchemaState::Number(NumberType::Float)) => {
+            SchemaState::Number(NumberType::Float)
         }
-        (SchemaState::Number { float: false }, SchemaState::Number { float: false }) => {
-            SchemaState::Number { float: false }
+        (SchemaState::Number(_), SchemaState::Number(_)) => {
+            SchemaState::Number(NumberType::Integer)
         }
 
         (SchemaState::Boolean, SchemaState::Boolean) => SchemaState::Boolean,
@@ -166,7 +170,11 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
             };
             SchemaState::String(t)
         }
-        serde_json::Value::Number(n) => SchemaState::Number { float: n.is_f64() },
+        serde_json::Value::Number(n) => SchemaState::Number(if n.is_f64() {
+            NumberType::Float
+        } else {
+            NumberType::Integer
+        }),
         serde_json::Value::Bool(_) => SchemaState::Boolean,
         serde_json::Value::Array(array) => SchemaState::Array(Box::new(infer_array_schema(array))),
         serde_json::Value::Object(object) => SchemaState::Object {
@@ -230,7 +238,7 @@ mod tests {
         let input = json!(42);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Number { float: false })
+        assert_eq!(schema, SchemaState::Number(NumberType::Integer))
     }
 
     #[test]
@@ -238,7 +246,7 @@ mod tests {
         let input = json!(42.0);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Number { float: true })
+        assert_eq!(schema, SchemaState::Number(NumberType::Float))
     }
 
     #[test]
@@ -280,8 +288,8 @@ mod tests {
                         "string".to_string(),
                         SchemaState::String(StringType::Unknown)
                     ),
-                    ("int".to_string(), SchemaState::Number { float: false }),
-                    ("float".to_string(), SchemaState::Number { float: true }),
+                    ("int".to_string(), SchemaState::Number(NumberType::Integer)),
+                    ("float".to_string(), SchemaState::Number(NumberType::Float)),
                     ("bool".to_string(), SchemaState::Boolean),
                     (
                         "array".to_string(),
@@ -330,7 +338,7 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number { float: false }))
+            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Integer)))
         );
     }
 
@@ -341,7 +349,7 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number { float: true }))
+            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Float)))
         );
     }
 
@@ -374,7 +382,7 @@ mod tests {
                 required: std::collections::HashMap::from_iter([
                     (
                         "baz".to_owned(),
-                        SchemaState::Nullable(Box::new(SchemaState::Number { float: false }))
+                        SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer)))
                     ),
                     ("qux".to_owned(), SchemaState::Boolean),
                 ]),
