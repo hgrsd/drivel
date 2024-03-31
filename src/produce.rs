@@ -31,7 +31,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     uuid.to_string()
                 }
                 StringType::Unknown {
-                    charset,
+                    char_distribution: charset,
                     min_length,
                     max_length,
                 } => {
@@ -47,10 +47,9 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                         take_n.fake()
                     } else {
                         let mut s = String::with_capacity(take_n);
-                        let chars = Vec::from_iter(charset);
                         for _ in 0..take_n {
-                            let idx = thread_rng().gen_range(0..chars.len());
-                            s.push(*chars[idx]);
+                            let idx = thread_rng().gen_range(0..charset.len());
+                            s.push(charset[idx]);
                         }
                         s
                     }

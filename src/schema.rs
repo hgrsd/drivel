@@ -1,9 +1,9 @@
-use std::{collections::HashSet, fmt::Display};
+use std::fmt::Display;
 
 #[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown {
-        charset: HashSet<char>,
+        char_distribution: Vec<char>,
         min_length: Option<usize>,
         max_length: Option<usize>,
     },
@@ -16,7 +16,7 @@ impl Display for StringType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             StringType::Unknown {
-                charset: _,
+                char_distribution: _,
                 min_length,
                 max_length,
             } => {
@@ -30,7 +30,7 @@ impl Display for StringType {
                     }
                     (Some(min), None) => format!("({}-?)", min),
                     (None, Some(max)) => format!("(?-{})", max),
-                    (None, None) => format!("(length unknown)"),
+                    (None, None) => "(length unknown)".to_string(),
                 };
                 format!("string {}", length)
             }
