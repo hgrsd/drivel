@@ -17,7 +17,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
             }
         }
         SchemaState::String(string_type) => {
-            let value = match *string_type {
+            let value = match string_type {
                 StringType::IsoDate => {
                     let date: NaiveDate = Faker.fake();
                     date.to_string()
@@ -31,16 +31,28 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     uuid.to_string()
                 }
                 StringType::Unknown {
-                    charset: _,
+                    charset,
                     min_length,
                     max_length,
                 } => {
                     let min = min_length.unwrap_or(0);
                     let max = max_length.unwrap_or(32);
-                    if min != max {
-                        (min..=max).fake()
+                    let take_n = if min != max {
+                        thread_rng().gen_range(min..=max)
                     } else {
-                        min.fake()
+                        min
+                    };
+
+                    if charset.is_empty() {
+                        take_n.fake()
+                    } else {
+                        let mut s = String::with_capacity(take_n);
+                        let chars = Vec::from_iter(charset);
+                        for _ in 0..take_n {
+                            let idx = thread_rng().gen_range(0..chars.len());
+                            s.push(*chars[idx]);
+                        }
+                        s
                     }
                 }
             };
