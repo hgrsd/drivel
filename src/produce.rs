@@ -31,6 +31,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     uuid.to_string()
                 }
                 StringType::Unknown {
+                    charset: _,
                     min_length,
                     max_length,
                 } => {

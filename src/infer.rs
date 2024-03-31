@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{NumberType, SchemaState, StringType};
 
 lazy_static! {
@@ -35,10 +37,12 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         // --- String merging ---
         (
             SchemaState::String(StringType::Unknown {
+                mut charset,
                 min_length,
                 max_length,
             }),
             SchemaState::String(StringType::Unknown {
+                charset: second_charset,
                 min_length: second_min_length,
                 max_length: second_max_length,
             }),
@@ -59,7 +63,10 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 second_max_length
             };
 
+            charset.extend(second_charset);
+
             SchemaState::String(StringType::Unknown {
+                charset,
                 min_length,
                 max_length,
             })
@@ -67,6 +74,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 
         (
             SchemaState::String(StringType::Unknown {
+                charset,
                 min_length,
                 max_length,
             }),
@@ -75,10 +83,12 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         | (
             SchemaState::String(_),
             SchemaState::String(StringType::Unknown {
+                charset,
                 min_length,
                 max_length,
             }),
         ) => SchemaState::String(StringType::Unknown {
+            charset,
             min_length,
             max_length,
         }),
@@ -88,6 +98,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 SchemaState::String(first_type)
             } else {
                 SchemaState::String(StringType::Unknown {
+                    charset: HashSet::new(),
                     min_length: None,
                     max_length: None,
                 })
@@ -285,6 +296,7 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
                 StringType::UUID
             } else {
                 StringType::Unknown {
+                    charset: value.chars().collect(),
                     min_length: Some(value.len()),
                     max_length: Some(value.len()),
                 }
@@ -320,6 +332,8 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use serde_json::json;
 
     use super::*;
@@ -340,6 +354,7 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::String(StringType::Unknown {
+                charset: HashSet::from_iter(['f', 'o', 'o']),
                 min_length: Some(3),
                 max_length: Some(3)
             })
@@ -433,6 +448,7 @@ mod tests {
                     (
                         "string".to_string(),
                         SchemaState::String(StringType::Unknown {
+                            charset: HashSet::from_iter(['f', 'o']),
                             min_length: Some(3),
                             max_length: Some(3)
                         })
@@ -455,6 +471,7 @@ mod tests {
                             min_length: 1,
                             max_length: 1,
                             schema: Box::new(SchemaState::String(StringType::Unknown {
+                                charset: HashSet::from_iter(['b', 'a', 'z']),
                                 min_length: Some(3),
                                 max_length: Some(3)
                             }))
@@ -467,6 +484,7 @@ mod tests {
                             required: std::collections::HashMap::from_iter([(
                                 "string".to_owned(),
                                 SchemaState::String(StringType::Unknown {
+                                    charset: HashSet::from_iter(['f', 'o']),
                                     min_length: Some(3),
                                     max_length: Some(3)
                                 })
@@ -506,6 +524,7 @@ mod tests {
                 min_length: 2,
                 max_length: 2,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
+                    charset: HashSet::from_iter(['f', 'o', 'b', 'a', 'r']),
                     min_length: Some(3),
                     max_length: Some(6)
                 }))
@@ -524,6 +543,7 @@ mod tests {
                 min_length: 2,
                 max_length: 2,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
+                    charset: HashSet::from_iter(['b', 'a', 'r']),
                     min_length: Some(6),
                     max_length: Some(6),
                 }))
@@ -620,6 +640,7 @@ mod tests {
                     optional: std::collections::HashMap::from_iter([(
                         "foo".to_owned(),
                         SchemaState::String(StringType::Unknown {
+                            charset: HashSet::from_iter(['b', 'a', 'r']),
                             min_length: Some(3),
                             max_length: Some(6)
                         })
@@ -663,6 +684,7 @@ mod tests {
                 max_length: 2,
                 schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(
                     StringType::Unknown {
+                        charset: HashSet::from_iter(['f', 'o']),
                         min_length: Some(3),
                         max_length: Some(3)
                     }
