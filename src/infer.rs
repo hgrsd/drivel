@@ -155,8 +155,26 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         (SchemaState::Boolean, SchemaState::Boolean) => SchemaState::Boolean,
 
         // --- Array merging ---
-        (SchemaState::Array(first_schema), SchemaState::Array(second_schema)) => {
-            SchemaState::Array(Box::new(merge(*first_schema, *second_schema)))
+        (
+            SchemaState::Array {
+                min_length,
+                max_length,
+                schema,
+            },
+            SchemaState::Array {
+                min_length: second_min_length,
+                max_length: second_max_length,
+                schema: second_schema,
+            },
+        ) => {
+            let min_length = min(min_length, second_min_length);
+            let max_length = max(max_length, second_max_length);
+            let schema = Box::new(merge(*schema, *second_schema));
+            SchemaState::Array {
+                min_length,
+                max_length,
+                schema,
+            }
         }
 
         // --- Object merging ---
@@ -285,7 +303,11 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
             }
         }),
         serde_json::Value::Bool(_) => SchemaState::Boolean,
-        serde_json::Value::Array(array) => SchemaState::Array(Box::new(infer_array_schema(array))),
+        serde_json::Value::Array(array) => SchemaState::Array {
+            min_length: array.len(),
+            max_length: array.len(),
+            schema: Box::new(infer_array_schema(array)),
+        },
         serde_json::Value::Object(object) => SchemaState::Object {
             required: object
                 .iter()
@@ -429,10 +451,14 @@ mod tests {
                     ("bool".to_string(), SchemaState::Boolean),
                     (
                         "array".to_string(),
-                        SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
-                            min_length: Some(3),
-                            max_length: Some(3)
-                        })))
+                        SchemaState::Array {
+                            min_length: 1,
+                            max_length: 1,
+                            schema: Box::new(SchemaState::String(StringType::Unknown {
+                                min_length: Some(3),
+                                max_length: Some(3)
+                            }))
+                        }
                     ),
                     ("null".to_string(), SchemaState::Null),
                     (
@@ -459,7 +485,14 @@ mod tests {
         let input = json!([null, null]);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Array(Box::new(SchemaState::Null)));
+        assert_eq!(
+            schema,
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Null)
+            }
+        );
     }
 
     #[test]
@@ -469,10 +502,14 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
-                min_length: Some(3),
-                max_length: Some(6)
-            })))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::String(StringType::Unknown {
+                    min_length: Some(3),
+                    max_length: Some(6)
+                }))
+            }
         );
     }
 
@@ -483,10 +520,14 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::String(StringType::Unknown {
-                min_length: Some(6),
-                max_length: Some(6),
-            })))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::String(StringType::Unknown {
+                    min_length: Some(6),
+                    max_length: Some(6),
+                }))
+            }
         );
     }
 
@@ -497,10 +538,14 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Integer {
-                min: 100,
-                max: 104
-            })))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Number(NumberType::Integer {
+                    min: 100,
+                    max: 104
+                }))
+            }
         );
     }
 
@@ -511,10 +556,14 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Number(NumberType::Float {
-                min: 100.0,
-                max: 104.5
-            })))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Number(NumberType::Float {
+                    min: 100.0,
+                    max: 104.5
+                }))
+            }
         );
     }
 
@@ -523,7 +572,14 @@ mod tests {
         let input = json!([true, false]);
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::Array(Box::new(SchemaState::Boolean)));
+        assert_eq!(
+            schema,
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Boolean)
+            }
+        );
     }
 
     #[test]
@@ -548,25 +604,28 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Object {
-                required: std::collections::HashMap::from_iter([
-                    (
-                        "baz".to_owned(),
-                        SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer {
-                            min: 10,
-                            max: 20,
-                        })))
-                    ),
-                    ("qux".to_owned(), SchemaState::Boolean),
-                ]),
-                optional: std::collections::HashMap::from_iter([(
-                    "foo".to_owned(),
-                    SchemaState::String(StringType::Unknown {
-                        min_length: Some(3),
-                        max_length: Some(6)
-                    })
-                )])
-            }))
+            SchemaState::Array {
+                min_length: 3,
+                max_length: 3,
+                schema: Box::new(SchemaState::Object {
+                    required: std::collections::HashMap::from_iter([
+                        (
+                            "baz".to_owned(),
+                            SchemaState::Nullable(Box::new(SchemaState::Number(
+                                NumberType::Integer { min: 10, max: 20 }
+                            )))
+                        ),
+                        ("qux".to_owned(), SchemaState::Boolean),
+                    ]),
+                    optional: std::collections::HashMap::from_iter([(
+                        "foo".to_owned(),
+                        SchemaState::String(StringType::Unknown {
+                            min_length: Some(3),
+                            max_length: Some(6)
+                        })
+                    )])
+                })
+            }
         )
     }
 
@@ -577,7 +636,15 @@ mod tests {
 
         assert_eq!(
             schema,
-            SchemaState::Array(Box::new(SchemaState::Array(Box::new(SchemaState::Boolean))))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Array {
+                    min_length: 1,
+                    max_length: 2,
+                    schema: Box::new(SchemaState::Boolean)
+                })
+            }
         );
     }
 
@@ -591,12 +658,16 @@ mod tests {
 
         assert_eq!(
             schema_1,
-            SchemaState::Array(Box::new(SchemaState::Nullable(Box::new(
-                SchemaState::String(StringType::Unknown {
-                    min_length: Some(3),
-                    max_length: Some(3)
-                })
-            ))))
+            SchemaState::Array {
+                min_length: 2,
+                max_length: 2,
+                schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(
+                    StringType::Unknown {
+                        min_length: Some(3),
+                        max_length: Some(3)
+                    }
+                ))))
+            }
         );
 
         assert_eq!(schema_1, schema_2)

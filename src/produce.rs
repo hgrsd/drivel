@@ -70,9 +70,13 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_j
             }
         },
         SchemaState::Boolean => serde_json::Value::Bool(random()),
-        SchemaState::Array(array_type) => {
-            if array_type.as_ref() == &SchemaState::Indefinite
-                || array_type.as_ref() == &SchemaState::Initial
+        SchemaState::Array {
+            min_length,
+            max_length,
+            schema,
+        } => {
+            if schema.as_ref() == &SchemaState::Indefinite
+                || schema.as_ref() == &SchemaState::Initial
             {
                 return serde_json::Value::Array(vec![]);
             }
@@ -86,7 +90,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, depth: usize) -> serde_j
             };
 
             let data: Vec<_> = (0..n_elements)
-                .map(|_| produce_inner(array_type, repeat_n, depth + 1))
+                .map(|_| produce_inner(schema, repeat_n, depth + 1))
                 .collect();
             serde_json::Value::Array(data)
         }

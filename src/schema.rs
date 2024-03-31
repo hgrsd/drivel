@@ -58,7 +58,11 @@ pub enum SchemaState {
     String(StringType),
     Number(NumberType),
     Boolean,
-    Array(Box<SchemaState>),
+    Array {
+        min_length: usize,
+        max_length: usize,
+        schema: Box<SchemaState>,
+    },
     Object {
         required: std::collections::HashMap<String, SchemaState>,
         optional: std::collections::HashMap<String, SchemaState>,
@@ -75,15 +79,21 @@ impl SchemaState {
             SchemaState::String(string_type) => format!("{}", string_type),
             SchemaState::Number(number_type) => format!("{}", number_type),
             SchemaState::Boolean => "boolean".to_string(),
-            SchemaState::Array(state) => {
+            SchemaState::Array {
+                min_length,
+                max_length,
+                schema,
+            } => {
                 let indent = 2 + 2 * depth;
                 let indent_str = " ".repeat(indent);
                 let indent_str_close = " ".repeat(indent - 2);
                 format!(
-                    "[\n{}{}\n{}]",
+                    "[\n{}{}\n{}] ({}-{})",
                     indent_str,
-                    state.to_string_pretty(depth + 1),
-                    indent_str_close
+                    schema.to_string_pretty(depth + 1),
+                    indent_str_close,
+                    min_length,
+                    max_length
                 )
             }
             SchemaState::Object { required, optional } => {
