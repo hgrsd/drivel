@@ -19,7 +19,13 @@ impl Display for StringType {
                 max_length,
             } => {
                 let length = match (min_length, max_length) {
-                    (Some(min), Some(max)) => format!("({}-{})", min, max),
+                    (Some(min), Some(max)) => {
+                        if min != max {
+                            format!("({}-{})", min, max)
+                        } else {
+                            format!("({})", min)
+                        }
+                    }
                     (Some(min), None) => format!("({}-?)", min),
                     (None, Some(max)) => format!("(?-{})", max),
                     (None, None) => format!("(length unknown)"),
@@ -43,8 +49,20 @@ pub enum NumberType {
 impl Display for NumberType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
-            NumberType::Integer { min, max } => format!("int ({}-{})", min, max),
-            NumberType::Float { min, max } => format!("float ({}-{})", min, max),
+            NumberType::Integer { min, max } => {
+                if min != max {
+                    format!("int ({}-{})", min, max)
+                } else {
+                    format!("int ({})", min)
+                }
+            }
+            NumberType::Float { min, max } => {
+                if min != max {
+                    format!("float ({}-{})", min, max)
+                } else {
+                    format!("float ({})", min)
+                }
+            }
         };
         write!(f, "{}", text)
     }
@@ -87,13 +105,17 @@ impl SchemaState {
                 let indent = 2 + 2 * depth;
                 let indent_str = " ".repeat(indent);
                 let indent_str_close = " ".repeat(indent - 2);
+                let length = if min_length != max_length {
+                    format!("({}-{})", min_length, max_length)
+                } else {
+                    format!("({})", min_length)
+                };
                 format!(
-                    "[\n{}{}\n{}] ({}-{})",
+                    "[\n{}{}\n{}] {}",
                     indent_str,
                     schema.to_string_pretty(depth + 1),
                     indent_str_close,
-                    min_length,
-                    max_length
+                    length
                 )
             }
             SchemaState::Object { required, optional } => {
