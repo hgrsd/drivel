@@ -29,6 +29,6 @@ fn main() {
             let schema = drivel::infer_schema(&parsed);
             println!("{}", schema.to_string_pretty(0));
         }
-        _ => println!("Invalid mode provided. Usage: drive [mode] <array_length>, where mode is in (describe, produce)")
+        _ => println!("Invalid mode provided. Usage: drivel [mode] <array_length>, where mode is in (describe, produce)")
     }
 }
