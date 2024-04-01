@@ -375,6 +375,52 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     }
 }
 
+/// Infer a schema, encoded as a SchemaState struct, from an iterator of JSON values.
+///
+/// This function iterates over a collection of JSON values and infers the schema by
+/// merging schemas inferred from individual JSON values. The resulting schema reflects
+/// the combined schema of all JSON values in the iterator.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use std::collections::HashMap;
+/// use drivel::{infer_schema_from_iter, SchemaState, StringType, NumberType};
+///
+/// // Define a collection of JSON values
+/// let values = vec![
+///     json!({
+///         "name": "Alice",
+///         "age": 30,
+///         "is_student": true
+///     }),
+///     json!({
+///         "name": "Bob",
+///         "age": 25,
+///         "is_student": false
+///     })
+/// ];
+///
+/// // Infer the schema from the iterator of JSON values
+/// let schema = infer_schema_from_iter(values.into_iter());
+///
+/// assert_eq!(
+///     schema,
+///     SchemaState::Object {
+///         required: HashMap::from_iter([
+///             ("name".to_string(), SchemaState::String(StringType::Unknown {
+///                 char_distribution: vec!['A', 'l', 'i', 'c', 'e', 'B', 'o', 'b'],
+///                 min_length: Some(3),
+///                 max_length: Some(5)
+///             })),
+///             ("age".to_string(), SchemaState::Number(NumberType::Integer { min: 25, max: 30 })),
+///             ("is_student".to_string(), SchemaState::Boolean),
+///         ]),
+///         optional: HashMap::new()
+///     }
+/// );
+/// ```
 pub fn infer_schema_from_iter<'a>(values: impl Iterator<Item = serde_json::Value>) -> SchemaState {
     values
         .map(|value| infer_schema(&value))
