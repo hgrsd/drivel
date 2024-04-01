@@ -70,7 +70,8 @@ impl Display for NumberType {
     }
 }
 
-/// The SchemaState enum is a recursive datastructure that describes the schema of a given JSON structure.
+/// The SchemaState enum is a recursive data structure that describes the schema of a given JSON structure.
+///
 /// There are a few notable differences with the data types from the JSON specification:
 /// - The SchemaState enum has Initial and Indefinite variants. These encode two possible results of the
 ///   schema inference process that have no equivalents in the JSON specification.
