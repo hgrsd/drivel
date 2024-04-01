@@ -11,10 +11,16 @@ an example JSON file, and generating synthetic data based on this inferred schem
 
 ## Installation
 
-To install drivel, ensure you have Rust installed and run:
+To install the drivel executable, ensure you have the Rust toolchain installed and run:
 
 ```sh
 cargo install drivel
+```
+
+To add drivel as a dependency to your project, e.g., to use the schema inference engine, run:
+
+```sh
+cargo add drivel
 ```
 
 ## Usage
@@ -51,6 +57,7 @@ Consider a JSON file `input.json`:
 ```json
 {
   "name": "John Doe",
+  "id": "0e3a99a5-0201-4444-9ab1-8343fac56233",
   "age": 30,
   "is_student": false,
   "grades": [85, 90, 78],
@@ -80,7 +87,8 @@ Output:
   "grades": [
     int (78-90)
   ] (3),
-  "name": string (8)
+  "name": string (8),
+  "id": string (uuid)
 }
 ```
 
@@ -102,7 +110,8 @@ Output:
     "age": 30,
     "grades": [83, 88, 88],
     "is_student": true,
-    "name": "nJ heo D"
+    "name": "nJ heo D",
+    "id": "9e0a7687-800d-404b-835f-e7d803b60380"
   },
   {
     "address": {
@@ -112,7 +121,8 @@ Output:
     "age": 30,
     "grades": [83, 88, 89],
     "is_student": false,
-    "name": "oeoooeeh"
+    "name": "oeoooeeh",
+    "id": "c6884c6b-4f6a-4788-a048-e749ec30793d"
   },
   {
     "address": {
@@ -122,7 +132,8 @@ Output:
     "age": 30,
     "grades": [85, 90, 86],
     "is_student": false,
-    "name": "ehnDoJDo"
+    "name": "ehnDoJDo",
+    "id": "71884608-2760-4853-8c12-e11149c642cd"
   }
 ]
 ```
