@@ -282,6 +282,45 @@ fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
         .fold(SchemaState::Initial, merge)
 }
 
+/// Infer a schema, encoded as a SchemaState struct, from a JSON value.
+/// This function will recursively traverse the given JSON structure and return a SchemaState struct.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use std::collections::HashMap;
+/// use drivel::{infer_schema, SchemaState, StringType, NumberType};
+///
+/// // Define a JSON value
+/// let input = json!({
+///     "name": "John",
+///     "age": 30,
+///     "is_student": false,
+///     "grades": [85, 92, 78]
+/// });
+///
+/// assert_eq!(
+///     infer_schema(&input),
+///     SchemaState::Object {
+///         required: HashMap::from_iter([
+///             ("name".to_string(), SchemaState::String(StringType::Unknown {
+///                 char_distribution: vec!['J', 'o', 'h', 'n'],
+///                 min_length: Some(4),
+///                 max_length: Some(4)
+///             })),
+///             ("age".to_string(), SchemaState::Number(NumberType::Integer { min: 30, max: 30 })),
+///             ("is_student".to_string(), SchemaState::Boolean),
+///             ("grades".to_string(), SchemaState::Array {
+///                 min_length: 3,
+///                 max_length: 3,
+///                 schema: Box::new(SchemaState::Number(NumberType::Integer { min: 78, max: 92 }))
+///             }),
+///         ]),
+///         optional: HashMap::new()
+///     }
+/// );
+/// ```
 pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     match json {
         serde_json::Value::Null => SchemaState::Null,

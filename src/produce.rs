@@ -122,6 +122,36 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
     }
 }
 
+/// Produces a JSON value based on the given schema.
+///
+/// This function generates a JSON value based on the provided schema state.
+///
+/// # Arguments
+///
+/// * `schema` - The schema state to produce JSON values for.
+/// * `repeat_n` - The number of times to repeat generation (used for arrays at the JSON root).
+///
+/// # Returns
+///
+/// # Examples
+///
+/// ```
+/// use drivel::{SchemaState, NumberType, produce};
+///
+/// // The inferred schema consists of an array with length = 1
+/// let schema = SchemaState::Array {
+///     min_length: 1,
+///     max_length: 1,
+///     schema: Box::new(SchemaState::Number(NumberType::Integer { min: 0, max: 100 })),
+/// };
+///
+/// // Generate three values based on the schema
+/// let json_data = produce(&schema, 3);
+///
+/// // Do something with the generated JSON data
+/// println!("{}", json_data);
+/// // Output: [23, 58, 12]
+/// ```
 pub fn produce(schema: &SchemaState, repeat_n: usize) -> serde_json::Value {
     produce_inner(schema, repeat_n, 0)
 }

@@ -1,5 +1,3 @@
-use drivel::produce;
-
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     let mode = args.get(1).expect(
@@ -21,13 +19,13 @@ fn main() {
                 parsed
             };
             let schema = drivel::infer_schema(&parsed);
-            let result = produce(&schema, repeat_n);
+            let result = drivel::produce(&schema, repeat_n);
             let stdout = std::io::stdout();
             serde_json::to_writer_pretty(stdout, &result).unwrap();
         },
         "describe" => {
             let schema = drivel::infer_schema(&parsed);
-            println!("{}", schema.to_string_pretty(0));
+            println!("{}", schema.to_string_pretty());
         }
         _ => println!("Invalid mode provided. Usage: drivel [mode] <array_length>, where mode is in (describe, produce)")
     }

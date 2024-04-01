@@ -1,6 +1,9 @@
 [package]
 name = "drivel"
-version = "0.1.0"
+description = "Infer a schema from JSON input, and generate synthetic data based on the inferred schema."
+license = "MIT"
+authors = ["Daniël Hogers <daniel@hgrsd.nl>"]
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
