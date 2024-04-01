@@ -375,6 +375,12 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     }
 }
 
+pub fn infer_schema_from_iter<'a>(
+    values: impl Iterator<Item = serde_json::Value>,
+) -> SchemaState {
+    values.map(|value| infer_schema(&value)).fold(SchemaState::Initial, merge)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -770,5 +776,49 @@ mod tests {
         );
 
         assert_eq!(schema_1, schema_2)
+    }
+
+    #[test]
+    fn infers_from_iter() {
+        let input = vec![
+            json!({
+                "foo": "bar",
+                "baz": 10,
+                "qux": true
+            }),
+            json!({
+                "baz": null,
+                "qux": false
+            }),
+            json!({
+                "foo": "barbar",
+                "baz": 20,
+                "qux": true
+            }),
+        ];
+        let schema = infer_schema_from_iter(input.into_iter());
+        assert_eq!(
+            schema,
+            SchemaState::Object {
+                required: std::collections::HashMap::from_iter([
+                    (
+                        "baz".to_owned(),
+                        SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer {
+                            min: 10,
+                            max: 20
+                        })))
+                    ),
+                    ("qux".to_owned(), SchemaState::Boolean),
+                ]),
+                optional: std::collections::HashMap::from_iter([(
+                    "foo".to_owned(),
+                    SchemaState::String(StringType::Unknown {
+                        char_distribution: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
+                        min_length: Some(3),
+                        max_length: Some(6)
+                    })
+                )])
+            }
+        );
     }
 }

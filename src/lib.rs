@@ -5,6 +5,6 @@ mod infer;
 mod produce;
 mod schema;
 
-pub use infer::infer_schema;
+pub use infer::*;
 pub use produce::produce;
 pub use schema::*;
