@@ -375,10 +375,10 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
     }
 }
 
-pub fn infer_schema_from_iter<'a>(
-    values: impl Iterator<Item = serde_json::Value>,
-) -> SchemaState {
-    values.map(|value| infer_schema(&value)).fold(SchemaState::Initial, merge)
+pub fn infer_schema_from_iter<'a>(values: impl Iterator<Item = serde_json::Value>) -> SchemaState {
+    values
+        .map(|value| infer_schema(&value))
+        .fold(SchemaState::Initial, merge)
 }
 
 #[cfg(test)]

@@ -12,10 +12,12 @@ fn main() {
         drivel::infer_schema(&json)
     } else {
         // unable to parse input as JSON; try JSON lines format as fallback
-        let values = input.lines().map(|line| serde_json::from_str(line).expect("Unable to parse input; format is neither JSON nor JSON lines"));
+        let values = input.lines().map(|line| {
+            serde_json::from_str(line)
+                .expect("Unable to parse input; format is neither JSON nor JSON lines")
+        });
         drivel::infer_schema_from_iter(values)
     };
-    
 
     match mode.as_str() {
         "produce" => {
@@ -32,7 +34,7 @@ fn main() {
                     }
                 }
             };
-                
+
             let result = drivel::produce(&schema, repeat_n);
             let stdout = std::io::stdout();
             serde_json::to_writer_pretty(stdout, &result).unwrap();
