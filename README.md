@@ -25,7 +25,22 @@ cargo add drivel
 
 ## Usage
 
-### Describe Mode
+```
+Infer a schema from JSON input, and generate synthetic data based on the inferred schema.
+
+Usage: drivel <COMMAND>
+
+Commands:
+  describe  Describe the inferred schema for the input data
+  produce   Produce synthetic data adhering to the inferred schema
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+### Describe
 
 In 'describe' mode, drivel infers the schema from the input JSON and prints a human-readable description of the schema. This mode is useful for understanding the structure and data types present in JSON data.
 
@@ -33,7 +48,7 @@ In 'describe' mode, drivel infers the schema from the input JSON and prints a hu
 cat input.json | drivel describe
 ```
 
-### Produce Mode
+### Produce
 
 In 'produce' mode, drivel infers the schema from the input JSON, generates synthetic data based on the inferred schema, and outputs the generated data in JSON format. This is useful for generating test data or sample datasets.
 
