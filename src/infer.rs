@@ -31,12 +31,14 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         // --- String merging ---
         (
             SchemaState::String(StringType::Unknown {
-                char_distribution: mut charset,
+                mut chars_seen,
+                mut strings_seen,
                 min_length,
                 max_length,
             }),
             SchemaState::String(StringType::Unknown {
-                char_distribution: second_charset,
+                chars_seen: second_chars_seen,
+                strings_seen: second_strings_seen,
                 min_length: second_min_length,
                 max_length: second_max_length,
             }),
@@ -57,10 +59,12 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 second_max_length
             };
 
-            charset.extend(second_charset);
+            chars_seen.extend(second_chars_seen);
+            strings_seen.extend(second_strings_seen);
 
             SchemaState::String(StringType::Unknown {
-                char_distribution: charset,
+                chars_seen,
+                strings_seen,
                 min_length,
                 max_length,
             })
@@ -68,7 +72,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 
         (
             SchemaState::String(StringType::Unknown {
-                char_distribution: charset,
+                chars_seen,
+                strings_seen,
                 min_length,
                 max_length,
             }),
@@ -77,12 +82,14 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         | (
             SchemaState::String(_),
             SchemaState::String(StringType::Unknown {
-                char_distribution: charset,
+                chars_seen,
+                strings_seen,
                 min_length,
                 max_length,
             }),
         ) => SchemaState::String(StringType::Unknown {
-            char_distribution: charset,
+            chars_seen,
+            strings_seen,
             min_length,
             max_length,
         }),
@@ -92,7 +99,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 SchemaState::String(first_type)
             } else {
                 SchemaState::String(StringType::Unknown {
-                    char_distribution: vec![],
+                    chars_seen: vec![],
+                    strings_seen: std::collections::HashSet::new(),
                     min_length: None,
                     max_length: None,
                 })
@@ -285,7 +293,7 @@ fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
 ///
 /// ```
 /// use serde_json::json;
-/// use std::collections::HashMap;
+/// use std::collections::{HashMap, HashSet};
 /// use drivel::{infer_schema, SchemaState, StringType, NumberType};
 ///
 /// // Define a JSON value
@@ -301,7 +309,8 @@ fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
 ///     SchemaState::Object {
 ///         required: HashMap::from_iter([
 ///             ("name".to_string(), SchemaState::String(StringType::Unknown {
-///                 char_distribution: vec!['J', 'o', 'h', 'n'],
+///                 chars_seen: vec!['J', 'o', 'h', 'n'],
+///                 strings_seen: HashSet::from_iter(["John".to_string()]),
 ///                 min_length: Some(4),
 ///                 max_length: Some(4)
 ///             })),
@@ -331,7 +340,8 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
                 StringType::UUID
             } else {
                 StringType::Unknown {
-                    char_distribution: value.chars().collect(),
+                    chars_seen: value.chars().collect(),
+                    strings_seen: std::collections::HashSet::from_iter([value.clone()]),
                     min_length: Some(value.len()),
                     max_length: Some(value.len()),
                 }
@@ -387,7 +397,8 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::String(StringType::Unknown {
-                char_distribution: vec!['f', 'o', 'o'],
+                chars_seen: vec!['f', 'o', 'o'],
+                strings_seen: std::collections::HashSet::from_iter(["foo".to_owned()]),
                 min_length: Some(3),
                 max_length: Some(3)
             })
@@ -497,7 +508,8 @@ mod tests {
                     (
                         "string".to_string(),
                         SchemaState::String(StringType::Unknown {
-                            char_distribution: vec!['f', 'o', 'o'],
+                            chars_seen: vec!['f', 'o', 'o'],
+                            strings_seen: std::collections::HashSet::from_iter(["foo".to_owned()]),
                             min_length: Some(3),
                             max_length: Some(3)
                         })
@@ -520,7 +532,10 @@ mod tests {
                             min_length: 1,
                             max_length: 1,
                             schema: Box::new(SchemaState::String(StringType::Unknown {
-                                char_distribution: vec!['b', 'a', 'z'],
+                                chars_seen: vec!['b', 'a', 'z'],
+                                strings_seen: std::collections::HashSet::from_iter([
+                                    "baz".to_owned()
+                                ]),
                                 min_length: Some(3),
                                 max_length: Some(3)
                             }))
@@ -533,7 +548,10 @@ mod tests {
                             required: std::collections::HashMap::from_iter([(
                                 "string".to_owned(),
                                 SchemaState::String(StringType::Unknown {
-                                    char_distribution: vec!['f', 'o', 'o'],
+                                    chars_seen: vec!['f', 'o', 'o'],
+                                    strings_seen: std::collections::HashSet::from_iter([
+                                        "foo".to_owned()
+                                    ]),
                                     min_length: Some(3),
                                     max_length: Some(3)
                                 })
@@ -573,7 +591,11 @@ mod tests {
                 min_length: 2,
                 max_length: 2,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
-                    char_distribution: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    strings_seen: std::collections::HashSet::from_iter([
+                        "foo".to_owned(),
+                        "barbar".to_owned(),
+                    ]),
                     min_length: Some(3),
                     max_length: Some(6)
                 }))
@@ -592,7 +614,8 @@ mod tests {
                 min_length: 2,
                 max_length: 2,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
-                    char_distribution: vec!['b', 'a', 'r', 'b', 'a', 'r'],
+                    chars_seen: vec!['b', 'a', 'r', 'b', 'a', 'r'],
+                    strings_seen: std::collections::HashSet::from_iter(["barbar".to_owned(),]),
                     min_length: Some(6),
                     max_length: Some(6),
                 }))
@@ -689,7 +712,11 @@ mod tests {
                     optional: std::collections::HashMap::from_iter([(
                         "foo".to_owned(),
                         SchemaState::String(StringType::Unknown {
-                            char_distribution: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
+                            chars_seen: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
+                            strings_seen: std::collections::HashSet::from_iter([
+                                "bar".to_owned(),
+                                "barbar".to_owned(),
+                            ]),
                             min_length: Some(3),
                             max_length: Some(6)
                         })
@@ -733,7 +760,8 @@ mod tests {
                 max_length: 2,
                 schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(
                     StringType::Unknown {
-                        char_distribution: vec!['f', 'o', 'o'],
+                        chars_seen: vec!['f', 'o', 'o'],
+                        strings_seen: std::collections::HashSet::from_iter(["foo".to_owned()]),
                         min_length: Some(3),
                         max_length: Some(3)
                     }

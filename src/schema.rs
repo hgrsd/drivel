@@ -1,9 +1,12 @@
 use std::fmt::Display;
 
+pub(crate) const STRING_VARIANTS_SMALL_DATA_BOUNDARY: usize = 10;
+
 #[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown {
-        char_distribution: Vec<char>,
+        chars_seen: Vec<char>,
+        strings_seen: std::collections::HashSet<String>,
         min_length: Option<usize>,
         max_length: Option<usize>,
     },
@@ -17,23 +20,31 @@ impl Display for StringType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             StringType::Unknown {
-                char_distribution: _,
+                chars_seen: _,
+                strings_seen,
                 min_length,
                 max_length,
             } => {
-                let length = match (min_length, max_length) {
-                    (Some(min), Some(max)) => {
-                        if min != max {
-                            format!("({}-{})", min, max)
-                        } else {
-                            format!("({})", min)
+                if strings_seen.len() > 0
+                    && strings_seen.len() <= STRING_VARIANTS_SMALL_DATA_BOUNDARY
+                {
+                    let as_vec = Vec::from_iter(strings_seen.iter().cloned());
+                    format!("string (limited dataset: {})", &as_vec.join(","))
+                } else {
+                    let length = match (min_length, max_length) {
+                        (Some(min), Some(max)) => {
+                            if min != max {
+                                format!("({}-{})", min, max)
+                            } else {
+                                format!("({})", min)
+                            }
                         }
-                    }
-                    (Some(min), None) => format!("({}-?)", min),
-                    (None, Some(max)) => format!("(?-{})", max),
-                    (None, None) => "(length unknown)".to_string(),
-                };
-                format!("string {}", length)
+                        (Some(min), None) => format!("({}-?)", min),
+                        (None, Some(max)) => format!("(?-{})", max),
+                        (None, None) => "(length unknown)".to_string(),
+                    };
+                    format!("string {}", length)
+                }
             }
             StringType::IsoDate => "string (date - ISO 8601)".to_owned(),
             StringType::DateTimeRFC2822 => "string (datetime - RFC 2822)".to_owned(),
@@ -190,12 +201,13 @@ impl SchemaState {
     ///
     /// ```
     /// use drivel::{SchemaState, StringType, NumberType};
-    /// use std::collections::HashMap;
+    /// use std::collections::{HashMap, HashSet};
     /// use std::iter::FromIterator;
     ///
     /// let required = HashMap::from_iter(vec![
     ///     ("name".to_string(), SchemaState::String(StringType::Unknown {
-    ///         char_distribution: vec!['a', 'b', 'c'],
+    ///         chars_seen: vec!['a', 'b', 'c'],
+    ///         strings_seen: HashSet::from_iter(["bac", "abc", "baa", "bcc"])
     ///         min_length: Some(1),
     ///         max_length: Some(10),
     ///     }))
