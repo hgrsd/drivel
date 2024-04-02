@@ -9,15 +9,15 @@ enum Mode {
     Produce {
         #[arg(short, long)]
         /// Produce `n` elements. Default = 1.
-        n_repeat: Option<usize>
-    }
+        n_repeat: Option<usize>,
+    },
 }
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     #[command(subcommand)]
-    mode: Mode
+    mode: Mode,
 }
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
     let input = std::io::read_to_string(std::io::stdin()).expect("Unable to read from stdin");
 
     let schema = if let Ok(json) = serde_json::from_str(&input) {
-        drivel::infer_schema(&json)
+        drivel::infer_schema(json)
     } else {
         // unable to parse input as JSON; try JSON lines format as fallback
         let values = input.lines().map(|line| {
@@ -43,10 +43,14 @@ fn main() {
                 SchemaState::Array { .. } => schema,
                 _ => {
                     // if the user wants to repeat the data more than once and we aren't dealing
-                    // with an array at the root, then we wrap the state in an array before we 
+                    // with an array at the root, then we wrap the state in an array before we
                     // produce our values
                     if n_repeat > 1 {
-                        SchemaState::Array { min_length: 1, max_length: 1, schema: Box::new(schema) }
+                        SchemaState::Array {
+                            min_length: 1,
+                            max_length: 1,
+                            schema: Box::new(schema),
+                        }
                     } else {
                         schema
                     }
@@ -56,7 +60,7 @@ fn main() {
             let result = drivel::produce(&schema, n_repeat);
             let stdout = std::io::stdout();
             serde_json::to_writer_pretty(stdout, &result).unwrap();
-        },
+        }
         Mode::Describe => {
             println!("{}", schema.to_string_pretty());
         }

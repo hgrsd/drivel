@@ -279,13 +279,6 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     }
 }
 
-fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
-    values
-        .iter()
-        .map(infer_schema)
-        .fold(SchemaState::Initial, merge)
-}
-
 /// Infer a schema, encoded as a SchemaState struct, from a JSON value.
 /// This function will recursively traverse the given JSON structure and return a SchemaState struct.
 ///
@@ -305,7 +298,7 @@ fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
 /// });
 ///
 /// assert_eq!(
-///     infer_schema(&input),
+///     infer_schema(input),
 ///     SchemaState::Object {
 ///         required: HashMap::from_iter([
 ///             ("name".to_string(), SchemaState::String(StringType::Unknown {
@@ -326,17 +319,17 @@ fn infer_array_schema(values: &[serde_json::Value]) -> SchemaState {
 ///     }
 /// );
 /// ```
-pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
+pub fn infer_schema(json: serde_json::Value) -> SchemaState {
     match json {
         serde_json::Value::Null => SchemaState::Null,
         serde_json::Value::String(value) => {
-            let t = if ISO_DATE_REGEX.is_match(value) {
+            let t = if ISO_DATE_REGEX.is_match(&value) {
                 StringType::IsoDate
-            } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(value) {
+            } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(&value) {
                 StringType::DateTimeISO8601
-            } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(value) {
+            } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(&value) {
                 StringType::DateTimeISO8601
-            } else if UUIDREGEX.is_match(value) {
+            } else if UUIDREGEX.is_match(&value) {
                 StringType::UUID
             } else {
                 StringType::Unknown {
@@ -363,12 +356,12 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
         serde_json::Value::Array(array) => SchemaState::Array {
             min_length: array.len(),
             max_length: array.len(),
-            schema: Box::new(infer_array_schema(array)),
+            schema: Box::new(infer_schema_from_iter(array.into_iter())),
         },
         serde_json::Value::Object(object) => SchemaState::Object {
             required: object
-                .iter()
-                .map(|(k, v)| (k.clone(), infer_schema(v)))
+                .into_iter()
+                .map(|(k, v)| (k, infer_schema(v)))
                 .collect(),
             optional: std::collections::HashMap::new(),
         },
@@ -424,7 +417,7 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
 /// ```
 pub fn infer_schema_from_iter<'a>(values: impl Iterator<Item = serde_json::Value>) -> SchemaState {
     values
-        .map(|value| infer_schema(&value))
+        .map(|value| infer_schema(value))
         .fold(SchemaState::Initial, merge)
 }
 
@@ -437,7 +430,7 @@ mod tests {
     #[test]
     fn infers_null() {
         let input = json!(null);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::Null)
     }
@@ -445,7 +438,7 @@ mod tests {
     #[test]
     fn infers_string_unknown_type() {
         let input = json!("foo");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -461,7 +454,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date() {
         let input = json!("2013-01-12");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::IsoDate))
     }
@@ -469,7 +462,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_2822() {
         let input = json!("Thu, 18 Mar 2021 10:37:31 +0000");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
     }
@@ -477,7 +470,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_3339_offset() {
         let input = json!("2013-01-12T00:00:00.000+00:00");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
     }
@@ -485,7 +478,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_3339_utc() {
         let input = json!("2013-01-12T00:00:00.000Z");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
     }
@@ -493,7 +486,7 @@ mod tests {
     #[test]
     fn infers_string_uuid() {
         let input = json!("988c2c6d-df1b-4bb9-b837-6ba706c0b4ad");
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::UUID))
     }
@@ -501,7 +494,7 @@ mod tests {
     #[test]
     fn infers_number() {
         let input = json!(42);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -512,7 +505,7 @@ mod tests {
     #[test]
     fn infers_number_float() {
         let input = json!(42.0);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -526,7 +519,7 @@ mod tests {
     #[test]
     fn infers_boolean_true() {
         let input = json!(true);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::Boolean)
     }
@@ -534,7 +527,7 @@ mod tests {
     #[test]
     fn infers_boolean_false() {
         let input = json!(false);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::Boolean)
     }
@@ -552,7 +545,7 @@ mod tests {
                 "string": "foo"
             }
         });
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -621,7 +614,7 @@ mod tests {
     #[test]
     fn infers_array_null() {
         let input = json!([null, null]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -636,7 +629,7 @@ mod tests {
     #[test]
     fn infers_array_string() {
         let input = json!(["foo", "barbar"]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -659,7 +652,7 @@ mod tests {
     #[test]
     fn infers_array_string_mixed() {
         let input = json!(["48f41410-2d97-4d54-8bfa-aa4e22acca01", "barbar"]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -679,7 +672,7 @@ mod tests {
     #[test]
     fn infers_array_number() {
         let input = json!([100, 104]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -697,7 +690,7 @@ mod tests {
     #[test]
     fn infers_array_number_float() {
         let input = json!([100, 104.5]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -715,7 +708,7 @@ mod tests {
     #[test]
     fn infers_array_boolean() {
         let input = json!([true, false]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -745,7 +738,7 @@ mod tests {
                 "qux": true
             },
         ]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -782,7 +775,7 @@ mod tests {
     #[test]
     fn infers_nested_array() {
         let input = json!([[true, false], [false]]);
-        let schema = infer_schema(&input);
+        let schema = infer_schema(input);
 
         assert_eq!(
             schema,
@@ -801,10 +794,10 @@ mod tests {
     #[test]
     fn infers_nullable_array() {
         let input_1 = json!(["foo", null]);
-        let schema_1 = infer_schema(&input_1);
+        let schema_1 = infer_schema(input_1);
 
         let input_2 = json!([null, "foo"]);
-        let schema_2 = infer_schema(&input_2);
+        let schema_2 = infer_schema(input_2);
 
         assert_eq!(
             schema_1,
