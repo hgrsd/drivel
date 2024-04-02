@@ -3,7 +3,7 @@ use fake::{Fake, Faker};
 use rand::{random, thread_rng, Rng};
 use serde_json::Number;
 
-use crate::{NumberType, SchemaState, StringType, STRING_VARIANTS_SMALL_DATA_BOUNDARY};
+use crate::{NumberType, SchemaState, StringType};
 
 fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) -> serde_json::Value {
     match schema {
@@ -38,43 +38,30 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                 }
                 StringType::Unknown {
                     chars_seen,
-                    strings_seen,
                     min_length,
                     max_length,
                 } => {
-                    // heuristic: if we have only seen a very small set of strings,
-                    // let's not generate a random string but pick one from the set.
-                    // this might be an enum we're dealing with, or otherwise we won't have
-                    // enough data to have a nice sample anyway.
-                    if strings_seen.len() > 0
-                        && strings_seen.len() < STRING_VARIANTS_SMALL_DATA_BOUNDARY
-                    {
-                        let as_vec = Vec::from_iter(strings_seen);
-                        let choice = as_vec[thread_rng().gen_range(0..as_vec.len())];
-                        choice.clone()
+                    let min = min_length.unwrap_or(0);
+                    let max = max_length.unwrap_or(32);
+                    let take_n = if min != max {
+                        thread_rng().gen_range(min..=max)
                     } else {
-                        let min = min_length.unwrap_or(0);
-                        let max = max_length.unwrap_or(32);
-                        let take_n = if min != max {
-                            thread_rng().gen_range(min..=max)
-                        } else {
-                            min
-                        };
+                        min
+                    };
 
-                        if chars_seen.is_empty() {
-                            // we have no data at all to go by; generate a totally random string
-                            take_n.fake()
-                        } else {
-                            // otherwise we use the fact that we have collected all characters seen
-                            // to generate a random string with a similar character distribution to the
-                            // input data.
-                            let mut s = String::with_capacity(take_n);
-                            for _ in 0..take_n {
-                                let idx = thread_rng().gen_range(0..chars_seen.len());
-                                s.push(chars_seen[idx]);
-                            }
-                            s
+                    if chars_seen.is_empty() {
+                        // we have no data at all to go by; generate a totally random string
+                        take_n.fake()
+                    } else {
+                        // otherwise we use the fact that we have collected all characters seen
+                        // to generate a random string with a similar character distribution to the
+                        // input data.
+                        let mut s = String::with_capacity(take_n);
+                        for _ in 0..take_n {
+                            let idx = thread_rng().gen_range(0..chars_seen.len());
+                            s.push(chars_seen[idx]);
                         }
+                        s
                     }
                 }
             };
