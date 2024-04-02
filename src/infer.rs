@@ -385,7 +385,7 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
 ///
 /// ```
 /// use serde_json::json;
-/// use std::collections::HashMap;
+/// use std::collections::{HashMap, HashSet};
 /// use drivel::{infer_schema_from_iter, SchemaState, StringType, NumberType};
 ///
 /// // Define a collection of JSON values
@@ -410,7 +410,8 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
 ///     SchemaState::Object {
 ///         required: HashMap::from_iter([
 ///             ("name".to_string(), SchemaState::String(StringType::Unknown {
-///                 char_distribution: vec!['A', 'l', 'i', 'c', 'e', 'B', 'o', 'b'],
+///                 chars_seen: vec!['A', 'l', 'i', 'c', 'e', 'B', 'o', 'b'],
+///                 strings_seen: HashSet::from_iter(["Alice".to_string(), "Bob".to_string()]),
 ///                 min_length: Some(3),
 ///                 max_length: Some(5)
 ///             })),
@@ -859,7 +860,11 @@ mod tests {
                 optional: std::collections::HashMap::from_iter([(
                     "foo".to_owned(),
                     SchemaState::String(StringType::Unknown {
-                        char_distribution: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
+                        chars_seen: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
+                        strings_seen: std::collections::HashSet::from_iter([
+                            "bar".to_string(),
+                            "barbar".to_string()
+                        ]),
                         min_length: Some(3),
                         max_length: Some(6)
                     })
