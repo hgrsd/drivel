@@ -207,7 +207,12 @@ impl SchemaState {
     /// let required = HashMap::from_iter(vec![
     ///     ("name".to_string(), SchemaState::String(StringType::Unknown {
     ///         chars_seen: vec!['a', 'b', 'c'],
-    ///         strings_seen: HashSet::from_iter(["bac", "abc", "baa", "bcc"])
+    ///         strings_seen: HashSet::from_iter([
+    ///             "bac".to_string(),
+    ///             "abc".to_string(),
+    ///             "baa".to_string(),
+    ///             "bcc".to_string()
+    ///         ]),
     ///         min_length: Some(1),
     ///         max_length: Some(10),
     ///     }))
