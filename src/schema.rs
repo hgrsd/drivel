@@ -8,7 +8,8 @@ pub enum StringType {
         max_length: Option<usize>,
     },
     IsoDate,
-    IsoDateTime,
+    DateTimeRFC2822,
+    DateTimeISO8601,
     UUID,
 }
 
@@ -34,8 +35,9 @@ impl Display for StringType {
                 };
                 format!("string {}", length)
             }
-            StringType::IsoDate => "string (iso date)".to_owned(),
-            StringType::IsoDateTime => "string (iso datetime)".to_owned(),
+            StringType::IsoDate => "string (date - ISO 8601)".to_owned(),
+            StringType::DateTimeRFC2822 => "string (datetime - RFC 2822)".to_owned(),
+            StringType::DateTimeISO8601 => "string (datetime - ISO 8601)".to_owned(),
             StringType::UUID => "string (uuid)".to_owned(),
         };
         write!(f, "{}", text)

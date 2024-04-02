@@ -2,10 +2,6 @@ use crate::{NumberType, SchemaState, StringType};
 
 lazy_static! {
     static ref ISO_DATE_REGEX: regex::Regex = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    static ref ISO_DATE_TIME_REGEX: regex::Regex = regex::Regex::new(
-        r"^\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-5]\d|Z)$"
-    )
-    .unwrap();
     static ref UUIDREGEX: regex::Regex =
         regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
             .unwrap();
@@ -327,8 +323,10 @@ pub fn infer_schema(json: &serde_json::Value) -> SchemaState {
         serde_json::Value::String(value) => {
             let t = if ISO_DATE_REGEX.is_match(value) {
                 StringType::IsoDate
-            } else if ISO_DATE_TIME_REGEX.is_match(value) {
-                StringType::IsoDateTime
+            } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(value) {
+                StringType::DateTimeISO8601
+            } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(value) {
+                StringType::DateTimeISO8601
             } else if UUIDREGEX.is_match(value) {
                 StringType::UUID
             } else {
@@ -405,11 +403,27 @@ mod tests {
     }
 
     #[test]
-    fn infers_string_iso_date_time() {
+    fn infers_string_iso_date_time_rfc_2822() {
+        let input = json!("Thu, 18 Mar 2021 10:37:31 +0000");
+        let schema = infer_schema(&input);
+
+        assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
+    }
+
+    #[test]
+    fn infers_string_iso_date_time_rfc_3339_offset() {
+        let input = json!("2013-01-12T00:00:00.000+00:00");
+        let schema = infer_schema(&input);
+
+        assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
+    }
+
+    #[test]
+    fn infers_string_iso_date_time_rfc_3339_utc() {
         let input = json!("2013-01-12T00:00:00.000Z");
         let schema = infer_schema(&input);
 
-        assert_eq!(schema, SchemaState::String(StringType::IsoDateTime))
+        assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
     }
 
     #[test]

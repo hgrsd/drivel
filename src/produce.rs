@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, SubsecRound, Utc};
 use fake::{Fake, Faker};
 use rand::{random, thread_rng, Rng};
 use serde_json::Number;
@@ -22,9 +22,15 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     let date: NaiveDate = Faker.fake();
                     date.to_string()
                 }
-                StringType::IsoDateTime => {
+                StringType::DateTimeISO8601 => {
                     let date_time: DateTime<Utc> = Faker.fake();
-                    date_time.to_string()
+                    let date_time = date_time.round_subsecs(3);
+                    date_time.to_rfc3339()
+                }
+                StringType::DateTimeRFC2822 => {
+                    let date_time: DateTime<Utc> = Faker.fake();
+                    let date_time = date_time.round_subsecs(3);
+                    date_time.to_rfc2822()
                 }
                 StringType::UUID => {
                     let uuid = uuid::Uuid::new_v4();
