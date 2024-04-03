@@ -1,5 +1,12 @@
 use chrono::{DateTime, NaiveDate, SubsecRound, Utc};
-use fake::{Fake, Faker};
+use fake::{
+    faker::{
+        company::en::Buzzword,
+        internet::en::{DomainSuffix, FreeEmail},
+        lorem::en::Word,
+    },
+    Fake, Faker,
+};
 use rand::{random, thread_rng, Rng};
 use serde_json::Number;
 
@@ -35,6 +42,23 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                 StringType::UUID => {
                     let uuid = uuid::Uuid::new_v4();
                     uuid.to_string()
+                }
+                StringType::Email => FreeEmail().fake(),
+                StringType::Hostname => {
+                    let name: String = Buzzword().fake();
+                    let suffix: String = DomainSuffix().fake();
+                    format!("{}.{}", name.to_lowercase(), suffix)
+                }
+                StringType::Url => {
+                    let host: String = Buzzword().fake();
+                    let suffix: String = DomainSuffix().fake();
+                    let path: String = Word().fake();
+                    format!(
+                        "https://{}.{}/{}",
+                        host.to_lowercase(),
+                        suffix,
+                        path.to_lowercase()
+                    )
                 }
                 StringType::Unknown {
                     chars_seen,

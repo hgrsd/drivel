@@ -11,6 +11,9 @@ pub enum StringType {
     DateTimeRFC2822,
     DateTimeISO8601,
     UUID,
+    Email,
+    Url,
+    Hostname,
 }
 
 impl Display for StringType {
@@ -39,6 +42,9 @@ impl Display for StringType {
             StringType::DateTimeRFC2822 => "string (datetime - RFC 2822)".to_owned(),
             StringType::DateTimeISO8601 => "string (datetime - ISO 8601)".to_owned(),
             StringType::UUID => "string (uuid)".to_owned(),
+            StringType::Email => "string (email)".to_owned(),
+            StringType::Hostname => "string (hostname)".to_owned(),
+            StringType::Url => "string (url)".to_owned(),
         };
         write!(f, "{}", text)
     }

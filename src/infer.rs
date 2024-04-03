@@ -1,11 +1,4 @@
-use crate::{NumberType, SchemaState, StringType};
-
-lazy_static! {
-    static ref ISO_DATE_REGEX: regex::Regex = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    static ref UUIDREGEX: regex::Regex =
-        regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap();
-}
+use crate::{infer_string::infer_string_type, NumberType, SchemaState, StringType};
 
 fn min<T: PartialOrd>(left: T, right: T) -> T {
     if left < right {
@@ -313,24 +306,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 pub fn infer_schema(json: serde_json::Value) -> SchemaState {
     match json {
         serde_json::Value::Null => SchemaState::Null,
-        serde_json::Value::String(value) => {
-            let t = if ISO_DATE_REGEX.is_match(&value) {
-                StringType::IsoDate
-            } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(&value) {
-                StringType::DateTimeISO8601
-            } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(&value) {
-                StringType::DateTimeISO8601
-            } else if UUIDREGEX.is_match(&value) {
-                StringType::UUID
-            } else {
-                StringType::Unknown {
-                    chars_seen: value.chars().collect(),
-                    min_length: Some(value.len()),
-                    max_length: Some(value.len()),
-                }
-            };
-            SchemaState::String(t)
-        }
+        serde_json::Value::String(value) => SchemaState::String(infer_string_type(&value)),
         serde_json::Value::Number(n) => SchemaState::Number(if n.is_f64() {
             NumberType::Float {
                 min: n.as_f64().unwrap(),
@@ -477,6 +453,30 @@ mod tests {
         let schema = infer_schema(input);
 
         assert_eq!(schema, SchemaState::String(StringType::UUID))
+    }
+
+    #[test]
+    fn infers_string_email() {
+        let input = json!("test@example.com");
+        let schema = infer_schema(input);
+
+        assert_eq!(schema, SchemaState::String(StringType::Email))
+    }
+
+    #[test]
+    fn infers_string_url() {
+        let input = json!("https://somedomain.somehost.nl/somepage");
+        let schema = infer_schema(input);
+
+        assert_eq!(schema, SchemaState::String(StringType::Url))
+    }
+
+    #[test]
+    fn infers_string_hostname() {
+        let input = json!("somehost.com");
+        let schema = infer_schema(input);
+
+        assert_eq!(schema, SchemaState::String(StringType::Hostname))
     }
 
     #[test]
