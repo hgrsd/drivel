@@ -8,6 +8,7 @@ use fake::{
     Fake, Faker,
 };
 use rand::{random, thread_rng, Rng};
+use rayon::prelude::*;
 use serde_json::Number;
 
 use crate::{NumberType, SchemaState, StringType};
@@ -133,6 +134,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
             };
 
             let data: Vec<_> = (0..n_elements)
+                .into_par_iter()
                 .map(|_| produce_inner(schema, repeat_n, current_depth + 1))
                 .collect();
             serde_json::Value::Array(data)
