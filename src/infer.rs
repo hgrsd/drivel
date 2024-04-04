@@ -1,4 +1,5 @@
 use crate::{infer_string::infer_string_type, NumberType, SchemaState, StringType};
+use rayon::prelude::*;
 
 fn min<T: PartialOrd>(left: T, right: T) -> T {
     if left < right {
@@ -18,8 +19,10 @@ fn max<T: PartialOrd>(left: T, right: T) -> T {
 
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     match (initial, new) {
-        (SchemaState::Initial, new) => new,
-        (SchemaState::Indefinite, s) | (s, SchemaState::Indefinite) => s,
+        (SchemaState::Initial, s)
+        | (s, SchemaState::Initial)
+        | (SchemaState::Indefinite, s)
+        | (s, SchemaState::Indefinite) => s,
 
         // --- String merging ---
         (
@@ -322,7 +325,7 @@ pub fn infer_schema(json: serde_json::Value) -> SchemaState {
         serde_json::Value::Array(array) => SchemaState::Array {
             min_length: array.len(),
             max_length: array.len(),
-            schema: Box::new(infer_schema_from_iter(array.into_iter())),
+            schema: Box::new(infer_schema_from_iter(array)),
         },
         serde_json::Value::Object(object) => SchemaState::Object {
             required: object
@@ -362,7 +365,7 @@ pub fn infer_schema(json: serde_json::Value) -> SchemaState {
 /// ];
 ///
 /// // Infer the schema from the iterator of JSON values
-/// let schema = infer_schema_from_iter(values.into_iter());
+/// let schema = infer_schema_from_iter(values);
 ///
 /// assert_eq!(
 ///     schema,
@@ -380,10 +383,11 @@ pub fn infer_schema(json: serde_json::Value) -> SchemaState {
 ///     }
 /// );
 /// ```
-pub fn infer_schema_from_iter<'a>(values: impl Iterator<Item = serde_json::Value>) -> SchemaState {
+pub fn infer_schema_from_iter(values: Vec<serde_json::Value>) -> SchemaState {
     values
+        .into_par_iter()
         .map(|value| infer_schema(value))
-        .fold(SchemaState::Initial, merge)
+        .reduce(|| SchemaState::Initial, |left, right| merge(left, right))
 }
 
 #[cfg(test)]
@@ -807,7 +811,7 @@ mod tests {
                 "qux": true
             }),
         ];
-        let schema = infer_schema_from_iter(input.into_iter());
+        let schema = infer_schema_from_iter(input);
         assert_eq!(
             schema,
             SchemaState::Object {
