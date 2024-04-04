@@ -2,6 +2,10 @@ use std::io::Read;
 
 use clap::{Parser, Subcommand};
 use drivel::SchemaState;
+use jemallocator::Jemalloc;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Subcommand, Debug)]
 enum Mode {

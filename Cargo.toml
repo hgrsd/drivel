@@ -14,6 +14,7 @@ chrono = "0.4.37"
 clap = { version = "4.5.4", features = ["derive"] }
 email_address = "0.2.4"
 fake = { version = "2.9.2", features = ["chrono"] }
+jemallocator = "0.5.4"
 lazy_static = "1.4.0"
 rand = "0.8.1"
 rayon = "1.10.0"
