@@ -6,7 +6,9 @@ lazy_static! {
         regex::Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
             .unwrap();
     static ref HOSTNAME_REGEX: regex::Regex =
-        regex::Regex::new(r"^[a-zA-Z0-9\-]+\.[a-zA-Z]{2}[a-zA-Z]*$").unwrap();
+        regex::Regex::new(r"^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}$").unwrap();
+    static ref EMAIL_REGEX: regex::Regex =
+        regex::Regex::new(r"[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,}$").unwrap();
 }
 
 pub(crate) fn infer_string_type(s: &str) -> StringType {
@@ -18,7 +20,7 @@ pub(crate) fn infer_string_type(s: &str) -> StringType {
         StringType::DateTimeISO8601
     } else if UUIDREGEX.is_match(s) {
         StringType::UUID
-    } else if email_address::EmailAddress::is_valid(s) {
+    } else if EMAIL_REGEX.is_match(s) {
         StringType::Email
     } else if let Ok(_) = url::Url::parse(s) {
         StringType::Url
