@@ -26,16 +26,29 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let input = std::io::read_to_string(std::io::stdin()).expect("Unable to read from stdin");
+    let input = match std::io::read_to_string(std::io::stdin()) {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("Unable to read from stdin. Error: {}", err.to_string());
+            std::process::exit(1)
+        }
+    };
+
     let schema = if let Ok(json) = serde_json::from_str(&input) {
         drivel::infer_schema(json)
     } else {
         // unable to parse input as JSON; try JSON lines format as fallback
         let values = input
             .lines()
-            .map(|line| {
-                serde_json::from_str(line)
-                    .expect("Unable to parse input; format is neither JSON nor JSON lines")
+            .map(|line| match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!(
+                        "Error parsing input; are you sure it is valid JSON? Error: {}",
+                        err
+                    );
+                    std::process::exit(1);
+                }
             })
             .collect();
         drivel::infer_schema_from_iter(values)
