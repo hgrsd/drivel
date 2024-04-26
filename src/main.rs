@@ -31,7 +31,7 @@ struct Args {
     #[arg(long, global=true)]
     enum_max_uniq: Option<f64>,
 
-    /// The minimum number of strings to consider when inferring enums. Default = 1.
+    /// The minimum sample size of strings before enum inference will be attempted. Default = 1.
     #[arg(long, global=true)]
     enum_min_n: Option<usize>,
 }
