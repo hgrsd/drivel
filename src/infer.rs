@@ -265,6 +265,73 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     }
 }
 
+fn apply_enum(s: StringType, opts: &EnumInference) -> StringType {
+    match s {
+        StringType::Unknown {
+            strings_seen,
+            chars_seen,
+            min_length,
+            max_length,
+        } => {
+            if strings_seen.len() < opts.min_sample_size {
+                return StringType::Unknown {
+                    strings_seen,
+                    chars_seen,
+                    min_length,
+                    max_length,
+                };
+            }
+
+            let variants = strings_seen
+                .iter()
+                .cloned()
+                .collect::<std::collections::HashSet<_>>();
+
+            let unique_ratio = variants.len() as f64 / strings_seen.len() as f64;
+            if unique_ratio > opts.max_unique_ratio {
+                return StringType::Unknown {
+                    strings_seen,
+                    chars_seen,
+                    min_length,
+                    max_length,
+                };
+            }
+
+            StringType::Enum { variants }
+        }
+        _ => s,
+    }
+}
+
+fn apply_enum_recursive(s: SchemaState, opts: &EnumInference) -> SchemaState {
+    match s {
+        SchemaState::String(s) => SchemaState::String(apply_enum(s, opts)),
+        SchemaState::Array {
+            min_length,
+            max_length,
+            schema,
+        } => SchemaState::Array {
+            min_length,
+            max_length,
+            schema: Box::new(apply_enum_recursive(*schema, opts)),
+        },
+        SchemaState::Object { required, optional } => SchemaState::Object {
+            required: required
+                .into_iter()
+                .map(|(k, v)| (k, apply_enum_recursive(v, opts)))
+                .collect(),
+            optional: optional
+                .into_iter()
+                .map(|(k, v)| (k, apply_enum_recursive(v, opts)))
+                .collect(),
+        },
+        SchemaState::Nullable(inner) => {
+            SchemaState::Nullable(Box::new(apply_enum_recursive(*inner, opts)))
+        }
+        _ => s,
+    }
+}
+
 /// Infer a schema, encoded as a SchemaState struct, from a JSON value.
 /// This function will recursively traverse the given JSON structure and return a SchemaState struct.
 ///
@@ -292,6 +359,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 ///     SchemaState::Object {
 ///         required: HashMap::from_iter([
 ///             ("name".to_string(), SchemaState::String(StringType::Unknown {
+///                 strings_seen: vec!["John".to_string()],
 ///                 chars_seen: vec!['J', 'o', 'h', 'n'],
 ///                 min_length: Some(4),
 ///                 max_length: Some(4)
@@ -309,7 +377,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 /// );
 /// ```
 pub fn infer_schema(json: serde_json::Value, options: &InferenceOptions) -> SchemaState {
-    match json {
+    let inferred = match json {
         serde_json::Value::Null => SchemaState::Null,
         serde_json::Value::String(value) => SchemaState::String(infer_string_type(&value)),
         serde_json::Value::Number(n) => SchemaState::Number(if n.is_f64() {
@@ -336,6 +404,12 @@ pub fn infer_schema(json: serde_json::Value, options: &InferenceOptions) -> Sche
                 .collect(),
             optional: std::collections::HashMap::new(),
         },
+    };
+
+    if let Some(enum_opts) = &options.enum_inference {
+        apply_enum_recursive(inferred, enum_opts)
+    } else {
+        inferred
     }
 }
 
@@ -378,6 +452,7 @@ pub fn infer_schema(json: serde_json::Value, options: &InferenceOptions) -> Sche
 ///     SchemaState::Object {
 ///         required: HashMap::from_iter([
 ///             ("name".to_string(), SchemaState::String(StringType::Unknown {
+///                 strings_seen: vec!["Alice".to_string(), "Bob".to_string()],
 ///                 chars_seen: vec!['A', 'l', 'i', 'c', 'e', 'B', 'o', 'b'],
 ///                 min_length: Some(3),
 ///                 max_length: Some(5)
@@ -625,9 +700,7 @@ mod tests {
                             min_length: 1,
                             max_length: 1,
                             schema: Box::new(SchemaState::String(StringType::Unknown {
-                                strings_seen: vec![ 
-                                    "baz".to_owned()
-                                ],
+                                strings_seen: vec!["baz".to_owned()],
                                 chars_seen: vec!['b', 'a', 'z'],
                                 min_length: Some(3),
                                 max_length: Some(3)
@@ -641,9 +714,7 @@ mod tests {
                             required: std::collections::HashMap::from_iter([(
                                 "string".to_owned(),
                                 SchemaState::String(StringType::Unknown {
-                                    strings_seen: vec![
-                                        "foo".to_owned()
-                                    ],
+                                    strings_seen: vec!["foo".to_owned()],
                                     chars_seen: vec!['f', 'o', 'o'],
                                     min_length: Some(3),
                                     max_length: Some(3)
@@ -690,10 +761,7 @@ mod tests {
                 min_length: 2,
                 max_length: 2,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
-                    strings_seen: vec![
-                        "foo".to_owned(),
-                        "barbar".to_owned()
-                    ],
+                    strings_seen: vec!["foo".to_owned(), "barbar".to_owned()],
                     chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
                     min_length: Some(3),
                     max_length: Some(6)
@@ -704,7 +772,7 @@ mod tests {
 
     #[test]
     fn infers_array_string_enum() {
-        let input = json!(["foo", "barbar"]);
+        let input = json!(["foo", "barbar", "barbar", "foo"]);
 
         let enum_opts = EnumInference {
             max_unique_ratio: 0.5,
@@ -719,8 +787,8 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::Array {
-                min_length: 2,
-                max_length: 2,
+                min_length: 4,
+                max_length: 4,
                 schema: Box::new(SchemaState::String(StringType::Enum {
                     variants: vec!["foo".to_owned(), "barbar".to_owned()]
                         .into_iter()
@@ -729,6 +797,65 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn infers_array_string_enum_uniq_ratio_too_high() {
+        let input = json!(["foo", "barbar", "foo", "barbar"]);
+
+        let enum_opts = EnumInference {
+            max_unique_ratio: 0.4, // 2 unique values out of 4 = unique ratio of 0.5
+            min_sample_size: 2,
+        };
+        let options = InferenceOptions {
+            enum_inference: Some(enum_opts),
+        };
+
+        let schema = infer_schema(input, &options);
+
+        assert_eq!(
+            schema,
+            SchemaState::Array {
+                min_length: 4,
+                max_length: 4,
+                schema: Box::new(SchemaState::String(StringType::Unknown {
+                    strings_seen: vec!["foo".to_owned(), "barbar".to_owned(), "foo".to_owned(), "barbar".to_owned()],
+                    chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    min_length: Some(3),
+                    max_length: Some(6)
+                }))
+            }
+        );
+    }
+
+    #[test]
+    fn infers_array_string_enum_sample_size_too_small() {
+        let input = json!(["foo", "barbar", "foo", "barbar"]);
+
+        let enum_opts = EnumInference {
+            max_unique_ratio: 0.5,
+            min_sample_size: 5, // sample size too small (4 vs 5)
+        };
+        let options = InferenceOptions {
+            enum_inference: Some(enum_opts),
+        };
+
+        let schema = infer_schema(input, &options);
+
+        assert_eq!(
+            schema,
+            SchemaState::Array {
+                min_length: 4,
+                max_length: 4,
+                schema: Box::new(SchemaState::String(StringType::Unknown {
+                    strings_seen: vec!["foo".to_owned(), "barbar".to_owned(), "foo".to_owned(), "barbar".to_owned()],
+                    chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    min_length: Some(3),
+                    max_length: Some(6)
+                }))
+            }
+        );
+    }
+
 
     #[test]
     fn infers_array_string_mixed() {
@@ -854,10 +981,7 @@ mod tests {
                     optional: std::collections::HashMap::from_iter([(
                         "foo".to_owned(),
                         SchemaState::String(StringType::Unknown {
-                            strings_seen: vec![
-                                "bar".to_owned(),
-                                "barbar".to_owned()
-                            ],
+                            strings_seen: vec!["bar".to_owned(), "barbar".to_owned()],
                             chars_seen: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
                             min_length: Some(3),
                             max_length: Some(6)
@@ -879,6 +1003,9 @@ mod tests {
             },
             {
                 "foo": "baz",
+            },
+            {
+                "foo": "bar",
             }
         ]);
         let enun_opts = EnumInference {
@@ -893,8 +1020,8 @@ mod tests {
         assert_eq!(
             schema,
             SchemaState::Array {
-                min_length: 3,
-                max_length: 3,
+                min_length: 4,
+                max_length: 4,
                 schema: Box::new(SchemaState::Object {
                     required: std::collections::HashMap::from_iter([(
                         "foo".to_owned(),
@@ -1000,10 +1127,7 @@ mod tests {
                 optional: std::collections::HashMap::from_iter([(
                     "foo".to_owned(),
                     SchemaState::String(StringType::Unknown {
-                        strings_seen: vec![
-                            "bar".to_owned(),
-                            "barbar".to_owned()
-                        ],
+                        strings_seen: vec!["bar".to_owned(), "barbar".to_owned()],
                         chars_seen: vec!['b', 'a', 'r', 'b', 'a', 'r', 'b', 'a', 'r'],
                         min_length: Some(3),
                         max_length: Some(6)

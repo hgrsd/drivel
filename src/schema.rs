@@ -211,6 +211,7 @@ impl SchemaState {
     ///
     /// let required = HashMap::from_iter(vec![
     ///     ("name".to_string(), SchemaState::String(StringType::Unknown {
+    ///         strings_seen: vec!["abc".to_string()],
     ///         chars_seen: vec!['a', 'b', 'c'],
     ///         min_length: Some(1),
     ///         max_length: Some(10),
