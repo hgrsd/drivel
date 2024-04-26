@@ -265,22 +265,14 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
     }
 }
 
-fn apply_enum(s: StringType, opts: &EnumInference) -> StringType {
-    match s {
+fn apply_enum_inner(s: StringType, opts: &EnumInference) -> StringType {
+    match &s {
         StringType::Unknown {
             strings_seen,
-            chars_seen,
-            min_length,
-            max_length,
+            ..
         } => {
             if strings_seen.len() < opts.min_sample_size {
-                return StringType::Unknown {
-                    strings_seen,
-                    chars_seen,
-                    min_length,
-                    max_length,
-                };
-            }
+                return s;            }
 
             let variants = strings_seen
                 .iter()
@@ -289,13 +281,7 @@ fn apply_enum(s: StringType, opts: &EnumInference) -> StringType {
 
             let unique_ratio = variants.len() as f64 / strings_seen.len() as f64;
             if unique_ratio > opts.max_unique_ratio {
-                return StringType::Unknown {
-                    strings_seen,
-                    chars_seen,
-                    min_length,
-                    max_length,
-                };
-            }
+                return s;            }
 
             StringType::Enum { variants }
         }
@@ -305,7 +291,7 @@ fn apply_enum(s: StringType, opts: &EnumInference) -> StringType {
 
 fn apply_enum_recursive(s: SchemaState, opts: &EnumInference) -> SchemaState {
     match s {
-        SchemaState::String(s) => SchemaState::String(apply_enum(s, opts)),
+        SchemaState::String(s) => SchemaState::String(apply_enum_inner(s, opts)),
         SchemaState::Array {
             min_length,
             max_length,
