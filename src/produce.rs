@@ -65,6 +65,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     chars_seen,
                     min_length,
                     max_length,
+                    ..
                 } => {
                     let min = min_length.unwrap_or(0);
                     let max = max_length.unwrap_or(32);

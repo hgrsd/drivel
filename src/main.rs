@@ -33,7 +33,7 @@ fn main() {
             std::process::exit(1)
         }
     };
-    
+
     let opts = drivel::InferenceOptions {
         enum_inference: None,
     };

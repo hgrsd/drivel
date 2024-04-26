@@ -3,6 +3,7 @@ use std::fmt::Display;
 #[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown {
+        strings_seen: std::collections::HashSet<String>,
         chars_seen: Vec<char>,
         min_length: Option<usize>,
         max_length: Option<usize>,
@@ -14,13 +15,16 @@ pub enum StringType {
     Email,
     Url,
     Hostname,
-    Enum { variants: std::collections::HashSet<String> }
+    Enum {
+        variants: std::collections::HashSet<String>,
+    },
 }
 
 impl Display for StringType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             StringType::Unknown {
+                strings_seen: _,
                 chars_seen: _,
                 min_length,
                 max_length,
