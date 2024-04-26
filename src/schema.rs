@@ -3,6 +3,7 @@ use std::fmt::Display;
 #[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown {
+        strings_seen: Vec<String>,
         chars_seen: Vec<char>,
         min_length: Option<usize>,
         max_length: Option<usize>,
@@ -14,12 +15,16 @@ pub enum StringType {
     Email,
     Url,
     Hostname,
+    Enum {
+        variants: std::collections::HashSet<String>,
+    },
 }
 
 impl Display for StringType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             StringType::Unknown {
+                strings_seen: _,
                 chars_seen: _,
                 min_length,
                 max_length,
@@ -45,6 +50,11 @@ impl Display for StringType {
             StringType::Email => "string (email)".to_owned(),
             StringType::Hostname => "string (hostname)".to_owned(),
             StringType::Url => "string (url)".to_owned(),
+            StringType::Enum { variants } => {
+                let variants_vec = variants.iter().cloned().collect::<Vec<_>>();
+                let formatted = variants_vec.join(", ");
+                format!("string (enum: {})", formatted)
+            }
         };
         write!(f, "{}", text)
     }
@@ -201,6 +211,7 @@ impl SchemaState {
     ///
     /// let required = HashMap::from_iter(vec![
     ///     ("name".to_string(), SchemaState::String(StringType::Unknown {
+    ///         strings_seen: vec!["abc".to_string()],
     ///         chars_seen: vec!['a', 'b', 'c'],
     ///         min_length: Some(1),
     ///         max_length: Some(10),

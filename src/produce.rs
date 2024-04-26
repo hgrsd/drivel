@@ -65,6 +65,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     chars_seen,
                     min_length,
                     max_length,
+                    ..
                 } => {
                     let min = min_length.unwrap_or(0);
                     let max = max_length.unwrap_or(32);
@@ -88,6 +89,11 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                         }
                         s
                     }
+                }
+                StringType::Enum { variants } => {
+                    let variants_vec = variants.iter().cloned().collect::<Vec<_>>();
+                    let idx = thread_rng().gen_range(0..variants_vec.len());
+                    variants_vec[idx].clone()
                 }
             };
             serde_json::Value::String(value)
