@@ -3,7 +3,7 @@ name = "drivel"
 description = "Infer a schema from JSON input, and generate synthetic data based on the inferred schema."
 license = "MIT"
 authors = ["Daniël Hogers <daniel@hgrsd.nl>"]
-version = "0.1.15"
+version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/hgrsd/drivel"
 

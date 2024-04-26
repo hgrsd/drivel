@@ -28,7 +28,7 @@ cargo add drivel
 ```
 Infer a schema from JSON input, and generate synthetic data based on the inferred schema.
 
-Usage: drivel <COMMAND>
+Usage: drivel [OPTIONS] <COMMAND>
 
 Commands:
   describe  Describe the inferred schema for the input data
@@ -36,8 +36,11 @@ Commands:
   help      Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
+      --infer-enum                     Infer that some string fields are enums based on the number of unique values seen
+      --enum-max-uniq <ENUM_MAX_UNIQ>  The maximum ratio of unique values to total values for a field to be considered an enum. Default = 0.1
+      --enum-min-n <ENUM_MIN_N>        The minimum number of strings to consider when inferring enums. Default = 1
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 ## Examples
