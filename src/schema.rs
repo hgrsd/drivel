@@ -3,7 +3,7 @@ use std::fmt::Display;
 #[derive(PartialEq, Debug)]
 pub enum StringType {
     Unknown {
-        strings_seen: std::collections::HashSet<String>,
+        strings_seen: Vec<String>,
         chars_seen: Vec<char>,
         min_length: Option<usize>,
         max_length: Option<usize>,
