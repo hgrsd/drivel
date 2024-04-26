@@ -33,9 +33,13 @@ fn main() {
             std::process::exit(1)
         }
     };
+    
+    let opts = drivel::InferenceOptions {
+        enum_inference: None,
+    };
 
     let schema = if let Ok(json) = serde_json::from_str(&input) {
-        drivel::infer_schema(json)
+        drivel::infer_schema(json, &opts)
     } else {
         // unable to parse input as JSON; try JSON lines format as fallback
         let values = input
@@ -51,7 +55,7 @@ fn main() {
                 }
             })
             .collect();
-        drivel::infer_schema_from_iter(values)
+        drivel::infer_schema_from_iter(values, &opts)
     };
 
     match &args.mode {

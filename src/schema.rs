@@ -14,6 +14,7 @@ pub enum StringType {
     Email,
     Url,
     Hostname,
+    Enum { variants: std::collections::HashSet<String> }
 }
 
 impl Display for StringType {
@@ -45,6 +46,11 @@ impl Display for StringType {
             StringType::Email => "string (email)".to_owned(),
             StringType::Hostname => "string (hostname)".to_owned(),
             StringType::Url => "string (url)".to_owned(),
+            StringType::Enum { variants } => {
+                let variants_vec = variants.iter().cloned().collect::<Vec<_>>();
+                let formatted = variants_vec.join(", ");
+                format!("string (enum: {})", formatted)
+            }
         };
         write!(f, "{}", text)
     }
