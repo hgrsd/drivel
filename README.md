@@ -11,7 +11,9 @@ based on the inferred schema.
 
 ## Installation
 
-To install the drivel executable, ensure you have the Rust toolchain installed and run:
+Binaries and a shell-based installer are available for [each release](https://github.com/hgrsd/drivel/releases).
+
+To install the drivel executable through Cargo, ensure you have the Rust toolchain installed and run:
 
 ```sh
 cargo install drivel
