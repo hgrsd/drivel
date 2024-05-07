@@ -10,16 +10,16 @@ repository = "https://github.com/hgrsd/drivel"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = { version = "0.4.37", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4.38", default-features = false, features = ["alloc"] }
 clap = { version = "4.5.4", features = ["derive"] }
 fake = { version = "2.9.2", features = ["chrono"] }
 jemallocator = "0.5.4"
 lazy_static = "1.4.0"
-rand = "0.8.1"
+rand = "0.8.5"
 rayon = "1.10.0"
-regex = "1.8.1"
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
+regex = "1.10.4"
+serde = { version = "1.0.200", features = ["derive"] }
+serde_json = "1.0.116"
 url = "2.5.0"
 uuid = { version = "1.8.0", features = ["v4"] }
 
@@ -31,9 +31,9 @@ lto = "thin"
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.13.3"
+cargo-dist-version = "0.14.0"
 # CI backends to support
-ci = ["github"]
+ci = "github"
 # The installers to generate for each app
 installers = ["shell"]
 # Target platforms to build apps for (Rust target-triple syntax)
