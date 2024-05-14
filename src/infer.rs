@@ -267,12 +267,10 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 
 fn apply_enum_inner(s: StringType, opts: &EnumInference) -> StringType {
     match &s {
-        StringType::Unknown {
-            strings_seen,
-            ..
-        } => {
+        StringType::Unknown { strings_seen, .. } => {
             if strings_seen.len() < opts.min_sample_size {
-                return s;            }
+                return s;
+            }
 
             let variants = strings_seen
                 .iter()
@@ -281,7 +279,8 @@ fn apply_enum_inner(s: StringType, opts: &EnumInference) -> StringType {
 
             let unique_ratio = variants.len() as f64 / strings_seen.len() as f64;
             if unique_ratio > opts.max_unique_ratio {
-                return s;            }
+                return s;
+            }
 
             StringType::Enum { variants }
         }
@@ -804,8 +803,16 @@ mod tests {
                 min_length: 4,
                 max_length: 4,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
-                    strings_seen: vec!["foo".to_owned(), "barbar".to_owned(), "foo".to_owned(), "barbar".to_owned()],
-                    chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    strings_seen: vec![
+                        "foo".to_owned(),
+                        "barbar".to_owned(),
+                        "foo".to_owned(),
+                        "barbar".to_owned()
+                    ],
+                    chars_seen: vec![
+                        'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r',
+                        'b', 'a', 'r'
+                    ],
                     min_length: Some(3),
                     max_length: Some(6)
                 }))
@@ -833,15 +840,22 @@ mod tests {
                 min_length: 4,
                 max_length: 4,
                 schema: Box::new(SchemaState::String(StringType::Unknown {
-                    strings_seen: vec!["foo".to_owned(), "barbar".to_owned(), "foo".to_owned(), "barbar".to_owned()],
-                    chars_seen: vec!['f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r'],
+                    strings_seen: vec![
+                        "foo".to_owned(),
+                        "barbar".to_owned(),
+                        "foo".to_owned(),
+                        "barbar".to_owned()
+                    ],
+                    chars_seen: vec![
+                        'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'r', 'f', 'o', 'o', 'b', 'a', 'r',
+                        'b', 'a', 'r'
+                    ],
                     min_length: Some(3),
                     max_length: Some(6)
                 }))
             }
         );
     }
-
 
     #[test]
     fn infers_array_string_mixed() {

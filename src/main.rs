@@ -24,15 +24,15 @@ struct Args {
     mode: Mode,
 
     /// Infer that some string fields are enums based on the number of unique values seen.
-    #[arg(long, global=true)]
+    #[arg(long, global = true)]
     infer_enum: bool,
 
     /// The maximum ratio of unique values to total values for a field to be considered an enum. Default = 0.1.
-    #[arg(long, global=true)]
+    #[arg(long, global = true)]
     enum_max_uniq: Option<f64>,
 
     /// The minimum sample size of strings before enum inference will be attempted. Default = 1.
-    #[arg(long, global=true)]
+    #[arg(long, global = true)]
     enum_min_n: Option<usize>,
 }
 
@@ -41,17 +41,15 @@ impl From<&Args> for Option<drivel::EnumInference> {
         if value.infer_enum {
             let max_unique_ratio = value.enum_max_uniq.unwrap_or(0.1);
             let min_sample_size = value.enum_min_n.unwrap_or(1);
-            Some(
-                drivel::EnumInference {
-                    max_unique_ratio,
-                    min_sample_size,
-                }
-            )
+            Some(drivel::EnumInference {
+                max_unique_ratio,
+                min_sample_size,
+            })
         } else {
             None
         }
     }
-} 
+}
 
 fn main() {
     let args = Args::parse();
