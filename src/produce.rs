@@ -131,12 +131,10 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
             let n_elements = if current_depth == 0 {
                 // if we are dealing with an array at the root, we produce the requested `n` elements
                 repeat_n
+            } else if min_length != max_length {
+                thread_rng().gen_range(*min_length..=*max_length)
             } else {
-                if min_length != max_length {
-                    thread_rng().gen_range(*min_length..=*max_length)
-                } else {
-                    *min_length
-                }
+                *min_length
             };
 
             let data: Vec<_> = (0..n_elements)

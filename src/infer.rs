@@ -50,20 +50,22 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max_length: second_max_length,
             }),
         ) => {
-            let min_length = if min_length.is_some() && second_min_length.is_some() {
-                Some(min(min_length.unwrap(), second_min_length.unwrap()))
-            } else if min_length.is_some() {
-                min_length
-            } else {
-                second_min_length
+            let min_length = match (min_length, second_min_length) {
+                (Some(min_length), Some(second_min_length)) => {
+                    Some(min(min_length, second_min_length))
+                }
+                (Some(min_length), None) => Some(min_length),
+                (None, Some(second_min_length)) => Some(second_min_length),
+                _ => None,
             };
 
-            let max_length = if max_length.is_some() && second_max_length.is_some() {
-                Some(max(max_length.unwrap(), second_max_length.unwrap()))
-            } else if max_length.is_some() {
-                max_length
-            } else {
-                second_max_length
+            let max_length = match (max_length, second_max_length) {
+                (Some(max_length), Some(second_max_length)) => {
+                    Some(max(max_length, second_max_length))
+                }
+                (Some(max_length), None) => Some(max_length),
+                (None, Some(second_max_length)) => Some(second_max_length),
+                _ => None,
             };
 
             chars_seen.extend(second_chars_seen);
@@ -210,10 +212,11 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 .map(|k| {
                     let first = first_required.remove(&k);
                     let second = second_required.remove(&k);
-                    let merged = if first.is_some() && second.is_some() {
-                        merge(first.unwrap(), second.unwrap())
-                    } else {
-                        first.unwrap_or(second.unwrap())
+                    let merged = match (first, second) {
+                        (Some(first), Some(second)) => merge(first, second),
+                        (Some(first), None) => first,
+                        (None, Some(second)) => second,
+                        _ => unreachable!(),
                     };
                     (k, merged)
                 })
@@ -228,10 +231,11 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                     let second = second_required
                         .remove(&k)
                         .or_else(|| second_optional.remove(&k));
-                    let merged = if first.is_some() && second.is_some() {
-                        merge(first.unwrap(), second.unwrap())
-                    } else {
-                        first.unwrap_or_else(|| second.unwrap())
+                    let merged = match (first, second) {
+                        (Some(first), Some(second)) => merge(first, second),
+                        (Some(first), None) => first,
+                        (None, Some(second)) => second,
+                        _ => unreachable!(),
                     };
                     (k, merged)
                 })
@@ -456,7 +460,7 @@ pub fn infer_schema_from_iter(
     values
         .into_par_iter()
         .map(|value| infer_schema(value, options))
-        .reduce(|| SchemaState::Initial, |left, right| merge(left, right))
+        .reduce(|| SchemaState::Initial, merge)
 }
 
 #[cfg(test)]

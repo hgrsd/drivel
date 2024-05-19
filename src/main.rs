@@ -56,7 +56,7 @@ fn main() {
     let input = match std::io::read_to_string(std::io::stdin()) {
         Ok(s) => s,
         Err(err) => {
-            eprintln!("Unable to read from stdin. Error: {}", err.to_string());
+            eprintln!("Unable to read from stdin. Error: {}", err);
             std::process::exit(1)
         }
     };

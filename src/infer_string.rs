@@ -14,15 +14,15 @@ lazy_static! {
 pub(crate) fn infer_string_type(s: &str) -> StringType {
     if ISO_DATE_REGEX.is_match(s) {
         StringType::IsoDate
-    } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(s) {
+    } else if chrono::DateTime::parse_from_rfc2822(s).is_ok() {
         StringType::DateTimeISO8601
-    } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(s) {
+    } else if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
         StringType::DateTimeISO8601
     } else if UUIDREGEX.is_match(s) {
         StringType::UUID
     } else if EMAIL_REGEX.is_match(s) {
         StringType::Email
-    } else if let Ok(_) = url::Url::parse(s) {
+    } else if url::Url::parse(s).is_ok() {
         StringType::Url
     } else if HOSTNAME_REGEX.is_match(s) {
         StringType::Hostname
