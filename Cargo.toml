@@ -3,7 +3,7 @@ name = "drivel"
 description = "Infer a schema from JSON input, and generate synthetic data based on the inferred schema."
 license = "MIT"
 authors = ["Daniël Hogers <daniel@hgrsd.nl>"]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 repository = "https://github.com/hgrsd/drivel"
 
@@ -11,16 +11,16 @@ repository = "https://github.com/hgrsd/drivel"
 
 [dependencies]
 chrono = { version = "0.4.38", default-features = false, features = ["alloc"] }
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.7", features = ["derive"] }
 fake = { version = "2.9.2", features = ["chrono"] }
 jemallocator = "0.5.4"
 lazy_static = "1.4.0"
 rand = "0.8.5"
 rayon = "1.10.0"
-regex = "1.10.4"
-serde = { version = "1.0.200", features = ["derive"] }
-serde_json = "1.0.116"
-url = "2.5.0"
+regex = "1.10.5"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+url = "2.5.1"
 uuid = { version = "1.8.0", features = ["v4"] }
 
 # The profile that 'cargo dist' will build with
@@ -31,7 +31,7 @@ lto = "thin"
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.14.0"
+cargo-dist-version = "0.16.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
