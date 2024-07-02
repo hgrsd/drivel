@@ -12,26 +12,40 @@ lazy_static! {
 }
 
 pub(crate) fn infer_string_type(s: &str) -> StringType {
-    if ISO_DATE_REGEX.is_match(s) {
-        StringType::IsoDate
-    } else if chrono::DateTime::parse_from_rfc2822(s).is_ok() {
-        StringType::DateTimeISO8601
-    } else if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
-        StringType::DateTimeISO8601
-    } else if UUIDREGEX.is_match(s) {
-        StringType::UUID
-    } else if EMAIL_REGEX.is_match(s) {
-        StringType::Email
-    } else if url::Url::parse(s).is_ok() {
-        StringType::Url
-    } else if HOSTNAME_REGEX.is_match(s) {
-        StringType::Hostname
-    } else {
-        StringType::Unknown {
-            strings_seen: vec![s.to_owned()],
-            chars_seen: s.chars().collect(),
-            min_length: Some(s.len()),
-            max_length: Some(s.len()),
+    if s.len() == 36 && UUIDREGEX.is_match(s) {
+        return StringType::UUID;
+    }
+
+    if s.contains('@') && EMAIL_REGEX.is_match(s) {
+        return StringType::Email;
+    }
+
+    if s.contains('.') {
+        if url::Url::parse(s).is_ok() {
+            return StringType::Url;
+        }
+        if HOSTNAME_REGEX.is_match(s) {
+            return StringType::Hostname;
         }
     }
+
+    if s.chars().take(1).all(|char| char.is_numeric()) {
+        if ISO_DATE_REGEX.is_match(s) {
+            return StringType::IsoDate;
+        }
+        if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
+            return StringType::DateTimeISO8601;
+        }
+    }
+
+    if chrono::DateTime::parse_from_rfc2822(s).is_ok() {
+        return StringType::DateTimeISO8601;
+    }
+
+    return StringType::Unknown {
+        strings_seen: vec![s.to_owned()],
+        chars_seen: s.chars().collect(),
+        min_length: Some(s.len()),
+        max_length: Some(s.len()),
+    };
 }
