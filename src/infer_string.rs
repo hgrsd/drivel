@@ -11,35 +11,56 @@ lazy_static! {
         regex::Regex::new(r"[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,}$").unwrap();
 }
 
-pub(crate) fn infer_string_type(s: &str) -> StringType {
+fn uuid(s: &str) -> Option<StringType> {
     if s.len() == 36 && UUIDREGEX.is_match(s) {
-        return StringType::UUID;
+        Some(StringType::UUID)
+    } else {
+        None
     }
+}
 
+fn email(s: &str) -> Option<StringType> {
     if s.contains('@') && EMAIL_REGEX.is_match(s) {
-        return StringType::Email;
+        Some(StringType::Email)
+    } else {
+        None
     }
+}
 
+fn url_host(s: &str) -> Option<StringType> {
     if s.contains('.') {
         if url::Url::parse(s).is_ok() {
-            return StringType::Url;
+            return Some(StringType::Url);
         }
         if HOSTNAME_REGEX.is_match(s) {
-            return StringType::Hostname;
+            return Some(StringType::Hostname);
         }
     }
+    None
+}
 
+fn dates(s: &str) -> Option<StringType> {
     if s.chars().take(1).all(|char| char.is_numeric()) {
         if ISO_DATE_REGEX.is_match(s) {
-            return StringType::IsoDate;
+            return Some(StringType::IsoDate);
         }
         if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
-            return StringType::DateTimeISO8601;
+            return Some(StringType::DateTimeISO8601);
         }
     }
 
     if chrono::DateTime::parse_from_rfc2822(s).is_ok() {
-        return StringType::DateTimeISO8601;
+        return Some(StringType::DateTimeISO8601);
+    }
+
+    None
+}
+
+pub(crate) fn infer_string_type(s: &str) -> StringType {
+    for matcher in [uuid, email, url_host, dates] {
+        if let Some(string_type) = matcher(s) {
+            return string_type;
+        }
     }
 
     return StringType::Unknown {
