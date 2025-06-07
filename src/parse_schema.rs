@@ -369,802 +369,562 @@ mod tests {
     use crate::schema::{StringType, NumberType};
     use serde_json::json;
 
-    #[test]
-    fn parse_basic_string_schema() {
-        let schema = json!({
-            "type": "string"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        // This should pass once we implement basic string parsing
+    // Test utilities
+    fn assert_string_parsing_success(result: Result<SchemaState, ParseSchemaError>) {
         match result {
-            Ok(SchemaState::String(_)) => {
-                // Success case - not reached yet with stub
-            }
-            _ => {
-                // Currently fails with stub - this is expected
-                panic!("Expected string schema to parse successfully");
-            }
+            Ok(SchemaState::String(_)) => {}
+            _ => panic!("Expected string schema to parse successfully"),
         }
     }
 
-    #[test]
-    fn parse_string_with_email_format() {
-        let schema = json!({
-            "type": "string",
-            "format": "email"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_number_parsing_success(result: Result<SchemaState, ParseSchemaError>) {
         match result {
-            Ok(SchemaState::String(StringType::Email)) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected email format string to parse to StringType::Email");
-            }
+            Ok(SchemaState::Number(_)) => {}
+            _ => panic!("Expected number schema to parse successfully"),
         }
     }
 
-    #[test] 
-    fn parse_string_with_uuid_format() {
-        let schema = json!({
-            "type": "string",
-            "format": "uuid"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_boolean_parsing_success(result: Result<SchemaState, ParseSchemaError>) {
         match result {
-            Ok(SchemaState::String(StringType::UUID)) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected uuid format string to parse to StringType::UUID");
-            }
+            Ok(SchemaState::Boolean) => {}
+            _ => panic!("Expected boolean schema to parse successfully"),
         }
     }
 
-    #[test]
-    fn parse_string_with_date_format() {
-        let schema = json!({
-            "type": "string", 
-            "format": "date"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_null_parsing_success(result: Result<SchemaState, ParseSchemaError>) {
         match result {
-            Ok(SchemaState::String(StringType::IsoDate)) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected date format string to parse to StringType::IsoDate");
-            }
+            Ok(SchemaState::Null) => {}
+            _ => panic!("Expected null schema to parse successfully"),
         }
     }
 
-    #[test]
-    fn parse_string_with_unsupported_format() {
-        let schema = json!({
-            "type": "string",
-            "format": "unsupported-format"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        // Should succeed but use basic string type, and warn to stderr
+    fn assert_string_format(result: Result<SchemaState, ParseSchemaError>, expected_format: StringType) {
         match result {
-            Ok(SchemaState::String(StringType::Unknown { .. })) => {
-                // Expected - falls back to unknown string type
+            Ok(SchemaState::String(actual_format)) => {
+                assert_eq!(std::mem::discriminant(&actual_format), std::mem::discriminant(&expected_format));
             }
-            _ => {
-                panic!("Expected unsupported format to fall back to Unknown string type");
-            }
+            _ => panic!("Expected string schema with specific format"),
         }
     }
 
-    #[test]
-    fn parse_string_with_length_constraints() {
-        let schema = json!({
-            "type": "string",
-            "minLength": 5,
-            "maxLength": 20
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_string_constraints(result: Result<SchemaState, ParseSchemaError>, min_length: Option<usize>, max_length: Option<usize>) {
         match result {
-            Ok(SchemaState::String(StringType::Unknown { min_length, max_length, .. })) => {
-                assert_eq!(min_length, Some(5));
-                assert_eq!(max_length, Some(20));
+            Ok(SchemaState::String(StringType::Unknown { min_length: actual_min, max_length: actual_max, .. })) => {
+                assert_eq!(actual_min, min_length, "Min length mismatch");
+                assert_eq!(actual_max, max_length, "Max length mismatch");
             }
-            _ => {
-                panic!("Expected string with length constraints to parse correctly");
-            }
+            _ => panic!("Expected string schema with Unknown type and constraints"),
         }
     }
 
-    #[test]
-    fn parse_string_with_min_length_only() {
-        let schema = json!({
-            "type": "string",
-            "minLength": 10
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_float_constraints(result: Result<SchemaState, ParseSchemaError>, min: f64, max: f64) {
         match result {
-            Ok(SchemaState::String(StringType::Unknown { min_length, max_length, .. })) => {
-                assert_eq!(min_length, Some(10));
-                assert_eq!(max_length, None);
+            Ok(SchemaState::Number(NumberType::Float { min: actual_min, max: actual_max })) => {
+                assert_eq!(actual_min, min, "Min value mismatch");
+                assert_eq!(actual_max, max, "Max value mismatch");
             }
-            _ => {
-                panic!("Expected string with min length to parse correctly");
-            }
+            _ => panic!("Expected float number schema with constraints"),
         }
     }
 
-    #[test]
-    fn parse_string_with_max_length_only() {
-        let schema = json!({
-            "type": "string",
-            "maxLength": 50
-        });
-        
-        let result = parse_json_schema(&schema);
-        
+    fn assert_integer_constraints(result: Result<SchemaState, ParseSchemaError>, min: i64, max: i64) {
         match result {
-            Ok(SchemaState::String(StringType::Unknown { min_length, max_length, .. })) => {
-                assert_eq!(min_length, None);
-                assert_eq!(max_length, Some(50));
+            Ok(SchemaState::Number(NumberType::Integer { min: actual_min, max: actual_max })) => {
+                assert_eq!(actual_min, min, "Min value mismatch");
+                assert_eq!(actual_max, max, "Max value mismatch");
             }
-            _ => {
-                panic!("Expected string with max length to parse correctly");
-            }
+            _ => panic!("Expected integer number schema with constraints"),
         }
     }
 
-    #[test]
-    fn parse_basic_number_schema() {
-        let schema = json!({
-            "type": "number"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(_)) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected number schema to parse successfully");
+    mod string_parsing {
+        use super::*;
+
+        #[test]
+        fn parse_basic_schema() {
+            let schema = json!({"type": "string"});
+            let result = parse_json_schema(&schema);
+            assert_string_parsing_success(result);
+        }
+
+        #[test]
+        fn parse_with_email_format() {
+            let schema = json!({"type": "string", "format": "email"});
+            let result = parse_json_schema(&schema);
+            assert_string_format(result, StringType::Email);
+        }
+
+        #[test]
+        fn parse_with_uuid_format() {
+            let schema = json!({"type": "string", "format": "uuid"});
+            let result = parse_json_schema(&schema);
+            assert_string_format(result, StringType::UUID);
+        }
+
+        #[test]
+        fn parse_with_date_format() {
+            let schema = json!({"type": "string", "format": "date"});
+            let result = parse_json_schema(&schema);
+            assert_string_format(result, StringType::IsoDate);
+        }
+
+        #[test]
+        fn parse_with_unsupported_format() {
+            let schema = json!({"type": "string", "format": "unsupported-format"});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::String(StringType::Unknown { .. })) => {}
+                _ => panic!("Expected unsupported format to fall back to Unknown string type"),
             }
         }
-    }
 
-    #[test]
-    fn parse_basic_integer_schema() {
-        let schema = json!({
-            "type": "integer"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(_)) => {
-                // Expected result  
-            }
-            _ => {
-                panic!("Expected integer schema to parse successfully");
-            }
+        #[test]
+        fn parse_with_length_constraints() {
+            let schema = json!({"type": "string", "minLength": 5, "maxLength": 20});
+            let result = parse_json_schema(&schema);
+            assert_string_constraints(result, Some(5), Some(20));
         }
-    }
 
-    #[test]
-    fn parse_number_with_constraints() {
-        let schema = json!({
-            "type": "number",
-            "minimum": 1.5,
-            "maximum": 99.9
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
-                assert_eq!(min, 1.5);
-                assert_eq!(max, 99.9);
-            }
-            _ => {
-                panic!("Expected number with constraints to parse correctly");
-            }
+        #[test]
+        fn parse_with_min_length_only() {
+            let schema = json!({"type": "string", "minLength": 10});
+            let result = parse_json_schema(&schema);
+            assert_string_constraints(result, Some(10), None);
         }
-    }
 
-    #[test]
-    fn parse_integer_with_constraints() {
-        let schema = json!({
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(crate::schema::NumberType::Integer { min, max })) => {
-                assert_eq!(min, 0);
-                assert_eq!(max, 100);
-            }
-            _ => {
-                panic!("Expected integer with constraints to parse correctly");
-            }
+        #[test]
+        fn parse_with_max_length_only() {
+            let schema = json!({"type": "string", "maxLength": 50});
+            let result = parse_json_schema(&schema);
+            assert_string_constraints(result, None, Some(50));
         }
-    }
 
-    #[test]
-    fn parse_number_without_constraints() {
-        let schema = json!({
-            "type": "number"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
-                assert_eq!(min, f64::NEG_INFINITY);
-                assert_eq!(max, f64::INFINITY);
-            }
-            _ => {
-                panic!("Expected number without constraints to use infinite bounds");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_integer_without_constraints() {
-        let schema = json!({
-            "type": "integer"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(crate::schema::NumberType::Integer { min, max })) => {
-                assert_eq!(min, i64::MIN);
-                assert_eq!(max, i64::MAX);
-            }
-            _ => {
-                panic!("Expected integer without constraints to use min/max bounds");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_number_with_unsupported_constraints() {
-        let schema = json!({
-            "type": "number",
-            "minimum": 5.0,
-            "exclusiveMaximum": 10.0,
-            "multipleOf": 2.5
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
-                assert_eq!(min, 5.0);
-                assert_eq!(max, f64::INFINITY);
-            }
-            _ => {
-                panic!("Expected number with unsupported constraints to parse with warnings");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_basic_boolean_schema() {
-        let schema = json!({
-            "type": "boolean"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Boolean) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected boolean schema to parse successfully");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_basic_null_schema() {
-        let schema = json!({
-            "type": "null"
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Null) => {
-                // Expected result
-            }
-            _ => {
-                panic!("Expected null schema to parse successfully");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_string_enum_schema() {
-        let schema = json!({
-            "type": "string",
-            "enum": ["foo", "bar", "baz"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::String(crate::schema::StringType::Enum { variants })) => {
-                assert_eq!(variants.len(), 3);
-                assert!(variants.contains("foo"));
-                assert!(variants.contains("bar"));
-                assert!(variants.contains("baz"));
-            }
-            _ => {
-                panic!("Expected string enum schema to parse to StringType::Enum");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_string_enum_empty() {
-        let schema = json!({
-            "type": "string",
-            "enum": []
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::String(crate::schema::StringType::Enum { variants })) => {
-                assert_eq!(variants.len(), 0);
-            }
-            _ => {
-                panic!("Expected empty string enum schema to parse to StringType::Enum");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_basic_object_schema() {
-        let schema = json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "age": {
-                    "type": "integer"
+        #[test]
+        fn parse_enum_schema() {
+            let schema = json!({"type": "string", "enum": ["foo", "bar", "baz"]});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::String(StringType::Enum { variants })) => {
+                    assert_eq!(variants.len(), 3);
+                    assert!(variants.contains("foo"));
+                    assert!(variants.contains("bar"));
+                    assert!(variants.contains("baz"));
                 }
-            },
-            "required": ["name"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Object { required, optional }) => {
-                // name should be required
-                assert!(required.contains_key("name"));
-                assert!(matches!(required.get("name"), Some(SchemaState::String(_))));
-                
-                // age should be optional
-                assert!(optional.contains_key("age"));
-                assert!(matches!(optional.get("age"), Some(SchemaState::Number(_))));
-            }
-            _ => {
-                panic!("Expected object schema to parse to SchemaState::Object");
+                _ => panic!("Expected string enum schema to parse to StringType::Enum"),
             }
         }
-    }
 
-    #[test]
-    fn parse_nested_object_schema() {
-        let schema = json!({
-            "type": "object",
-            "properties": {
-                "user": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "integer"
-                        },
-                        "email": {
-                            "type": "string",
-                            "format": "email"
-                        }
-                    },
-                    "required": ["id"]
-                },
-                "active": {
-                    "type": "boolean"
+        #[test]
+        fn parse_empty_enum() {
+            let schema = json!({"type": "string", "enum": []});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::String(StringType::Enum { variants })) => {
+                    assert_eq!(variants.len(), 0);
                 }
-            },
-            "required": ["user"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Object { required, optional }) => {
-                // user should be required and be an object
-                assert!(required.contains_key("user"));
-                match required.get("user") {
-                    Some(SchemaState::Object { required: user_required, optional: user_optional }) => {
-                        // Check nested object structure
-                        assert!(user_required.contains_key("id"));
-                        assert!(matches!(user_required.get("id"), Some(SchemaState::Number(_))));
-                        
-                        assert!(user_optional.contains_key("email"));
-                        assert!(matches!(user_optional.get("email"), Some(SchemaState::String(_))));
-                    }
-                    _ => panic!("Expected user field to be an object")
-                }
-                
-                // active should be optional
-                assert!(optional.contains_key("active"));
-                assert!(matches!(optional.get("active"), Some(SchemaState::Boolean)));
-            }
-            _ => {
-                panic!("Expected nested object schema to parse to SchemaState::Object");
+                _ => panic!("Expected empty string enum schema to parse to StringType::Enum"),
             }
         }
     }
 
-    #[test]
-    fn parse_basic_array_schema() {
-        let schema = json!({
-            "type": "array",
-            "items": {
-                "type": "string"
-            },
-            "minItems": 1,
-            "maxItems": 10
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
-                assert_eq!(min_length, 1);
-                assert_eq!(max_length, 10);
-                assert!(matches!(item_schema.as_ref(), SchemaState::String(_)));
-            }
-            _ => {
-                panic!("Expected array schema to parse to SchemaState::Array");
-            }
+    mod number_parsing {
+        use super::*;
+
+        #[test]
+        fn parse_basic_number_schema() {
+            let schema = json!({"type": "number"});
+            let result = parse_json_schema(&schema);
+            assert_number_parsing_success(result);
+        }
+
+        #[test]
+        fn parse_basic_integer_schema() {
+            let schema = json!({"type": "integer"});
+            let result = parse_json_schema(&schema);
+            assert_number_parsing_success(result);
+        }
+
+        #[test]
+        fn parse_number_with_constraints() {
+            let schema = json!({"type": "number", "minimum": 1.5, "maximum": 99.9});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, 1.5, 99.9);
+        }
+
+        #[test]
+        fn parse_integer_with_constraints() {
+            let schema = json!({"type": "integer", "minimum": 0, "maximum": 100});
+            let result = parse_json_schema(&schema);
+            assert_integer_constraints(result, 0, 100);
+        }
+
+        #[test]
+        fn parse_number_without_constraints() {
+            let schema = json!({"type": "number"});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, f64::NEG_INFINITY, f64::INFINITY);
+        }
+
+        #[test]
+        fn parse_integer_without_constraints() {
+            let schema = json!({"type": "integer"});
+            let result = parse_json_schema(&schema);
+            assert_integer_constraints(result, i64::MIN, i64::MAX);
+        }
+
+        #[test]
+        fn parse_number_with_unsupported_constraints() {
+            let schema = json!({"type": "number", "minimum": 5.0, "exclusiveMaximum": 10.0, "multipleOf": 2.5});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, 5.0, f64::INFINITY);
         }
     }
 
-    #[test]
-    fn parse_array_without_constraints() {
-        let schema = json!({
-            "type": "array",
-            "items": {
-                "type": "integer"
-            }
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
-                assert_eq!(min_length, 0);
-                assert_eq!(max_length, usize::MAX);
-                assert!(matches!(item_schema.as_ref(), SchemaState::Number(_)));
-            }
-            _ => {
-                panic!("Expected array without constraints to parse with default bounds");
-            }
+    mod basic_types {
+        use super::*;
+
+        #[test]
+        fn parse_boolean_schema() {
+            let schema = json!({"type": "boolean"});
+            let result = parse_json_schema(&schema);
+            assert_boolean_parsing_success(result);
+        }
+
+        #[test]
+        fn parse_null_schema() {
+            let schema = json!({"type": "null"});
+            let result = parse_json_schema(&schema);
+            assert_null_parsing_success(result);
         }
     }
 
-    #[test]
-    fn parse_nested_array_schema() {
-        let schema = json!({
-            "type": "array",
-            "items": {
-                "type": "array",
-                "items": {
-                    "type": "string",
-                    "format": "email"
-                },
-                "minItems": 2,
-                "maxItems": 5
-            },
-            "minItems": 1,
-            "maxItems": 3
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
-                assert_eq!(min_length, 1);
-                assert_eq!(max_length, 3);
-                
-                // Check nested array
-                match item_schema.as_ref() {
-                    SchemaState::Array { min_length: inner_min, max_length: inner_max, schema: inner_schema } => {
-                        assert_eq!(*inner_min, 2);
-                        assert_eq!(*inner_max, 5);
-                        assert!(matches!(inner_schema.as_ref(), SchemaState::String(_)));
-                    }
-                    _ => panic!("Expected nested array structure")
-                }
-            }
-            _ => {
-                panic!("Expected nested array schema to parse to SchemaState::Array");
-            }
-        }
-    }
+    mod complex_types {
+        use super::*;
 
-    #[test]
-    fn parse_array_of_objects() {
-        let schema = json!({
-            "type": "array",
-            "items": {
+        #[test]
+        fn parse_basic_object_schema() {
+            let schema = json!({
                 "type": "object",
                 "properties": {
-                    "id": {
-                        "type": "integer"
+                    "name": {"type": "string"},
+                    "age": {"type": "integer"}
+                },
+                "required": ["name"]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Object { required, optional }) => {
+                    assert!(required.contains_key("name"));
+                    assert!(matches!(required.get("name"), Some(SchemaState::String(_))));
+                    assert!(optional.contains_key("age"));
+                    assert!(matches!(optional.get("age"), Some(SchemaState::Number(_))));
+                }
+                _ => panic!("Expected object schema to parse to SchemaState::Object"),
+            }
+        }
+
+        #[test]
+        fn parse_nested_object_schema() {
+            let schema = json!({
+                "type": "object",
+                "properties": {
+                    "user": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "email": {"type": "string", "format": "email"}
+                        },
+                        "required": ["id"]
                     },
-                    "name": {
-                        "type": "string"
-                    }
+                    "active": {"type": "boolean"}
                 },
-                "required": ["id"]
-            }
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Array { schema: item_schema, .. }) => {
-                match item_schema.as_ref() {
-                    SchemaState::Object { required, optional } => {
-                        assert!(required.contains_key("id"));
-                        assert!(optional.contains_key("name"));
+                "required": ["user"]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Object { required, optional }) => {
+                    assert!(required.contains_key("user"));
+                    match required.get("user") {
+                        Some(SchemaState::Object { required: user_required, optional: user_optional }) => {
+                            assert!(user_required.contains_key("id"));
+                            assert!(matches!(user_required.get("id"), Some(SchemaState::Number(_))));
+                            assert!(user_optional.contains_key("email"));
+                            assert!(matches!(user_optional.get("email"), Some(SchemaState::String(_))));
+                        }
+                        _ => panic!("Expected user field to be an object")
                     }
-                    _ => panic!("Expected array items to be objects")
+                    assert!(optional.contains_key("active"));
+                    assert!(matches!(optional.get("active"), Some(SchemaState::Boolean)));
                 }
-            }
-            _ => {
-                panic!("Expected array of objects to parse correctly");
+                _ => panic!("Expected nested object schema to parse to SchemaState::Object"),
             }
         }
-    }
 
-    // Nullable type tests
-    #[test]
-    fn parse_nullable_string() {
-        let schema = json!({
-            "type": ["string", "null"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::String(_) => {
-                        // Success case
-                    }
-                    _ => panic!("Expected nullable string to contain string type")
+        #[test]
+        fn parse_basic_array_schema() {
+            let schema = json!({
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 10
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                    assert_eq!(min_length, 1);
+                    assert_eq!(max_length, 10);
+                    assert!(matches!(item_schema.as_ref(), SchemaState::String(_)));
                 }
+                _ => panic!("Expected array schema to parse to SchemaState::Array"),
             }
-            _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
         }
-    }
 
-    #[test]
-    fn parse_nullable_integer() {
-        let schema = json!({
-            "type": ["integer", "null"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::Number(NumberType::Integer { .. }) => {
-                        // Success case  
-                    }
-                    _ => panic!("Expected nullable integer to contain integer type")
+        #[test]
+        fn parse_array_without_constraints() {
+            let schema = json!({
+                "type": "array",
+                "items": {"type": "integer"}
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                    assert_eq!(min_length, 0);
+                    assert_eq!(max_length, usize::MAX);
+                    assert!(matches!(item_schema.as_ref(), SchemaState::Number(_)));
                 }
+                _ => panic!("Expected array without constraints to parse with default bounds"),
             }
-            _ => panic!("Expected nullable integer to parse as SchemaState::Nullable")
         }
-    }
 
-    #[test]
-    fn parse_nullable_array() {
-        let schema = json!({
-            "type": ["array", "null"],
-            "items": {
-                "type": "string"
-            }
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::Array { .. } => {
-                        // Success case
-                    }
-                    _ => panic!("Expected nullable array to contain array type")
-                }
-            }
-            _ => panic!("Expected nullable array to parse as SchemaState::Nullable")
-        }
-    }
-
-    #[test]
-    fn parse_nullable_object() {
-        let schema = json!({
-            "type": ["object", "null"],
-            "properties": {
-                "name": {
-                    "type": "string"
-                }
-            }
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::Object { .. } => {
-                        // Success case
-                    }
-                    _ => panic!("Expected nullable object to contain object type")
-                }
-            }
-            _ => panic!("Expected nullable object to parse as SchemaState::Nullable")
-        }
-    }
-
-    #[test]
-    fn parse_nullable_reversed_order() {
-        let schema = json!({
-            "type": ["null", "string"]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::String(_) => {
-                        // Success case - order shouldn't matter
-                    }
-                    _ => panic!("Expected nullable string to contain string type")
-                }
-            }
-            _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
-        }
-    }
-
-    // Test other nullable patterns that should work but don't yet
-    #[test]
-    fn parse_nullable_anyof_pattern() {
-        let schema = json!({
-            "anyOf": [
-                {"type": "string"},
-                {"type": "null"}
-            ]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::String(_) => {
-                        // Success case
-                    }
-                    _ => panic!("Expected nullable string via anyOf to contain string type")
-                }
-            }
-            _ => panic!("Expected anyOf nullable pattern to parse as SchemaState::Nullable")
-        }
-    }
-
-    #[test]
-    fn parse_nullable_oneof_pattern() {
-        let schema = json!({
-            "oneOf": [
-                {"type": "string"},
-                {"type": "null"}
-            ]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::String(_) => {
-                        // Success case
-                    }
-                    _ => panic!("Expected nullable string via oneOf to contain string type")
-                }
-            }
-            _ => panic!("Expected oneOf nullable pattern to parse as SchemaState::Nullable")
-        }
-    }
-
-    #[test]
-    fn parse_nullable_anyof_with_constraints() {
-        let schema = json!({
-            "anyOf": [
-                {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 100
+        #[test]
+        fn parse_nested_array_schema() {
+            let schema = json!({
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string", "format": "email"},
+                    "minItems": 2,
+                    "maxItems": 5
                 },
-                {"type": "null"}
-            ]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::Number(NumberType::Integer { min, max }) => {
-                        assert_eq!(*min, 1);
-                        assert_eq!(*max, 100);
+                "minItems": 1,
+                "maxItems": 3
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                    assert_eq!(min_length, 1);
+                    assert_eq!(max_length, 3);
+                    match item_schema.as_ref() {
+                        SchemaState::Array { min_length: inner_min, max_length: inner_max, schema: inner_schema } => {
+                            assert_eq!(*inner_min, 2);
+                            assert_eq!(*inner_max, 5);
+                            assert!(matches!(inner_schema.as_ref(), SchemaState::String(_)));
+                        }
+                        _ => panic!("Expected nested array structure")
                     }
-                    _ => panic!("Expected nullable integer with constraints")
                 }
+                _ => panic!("Expected nested array schema to parse to SchemaState::Array"),
             }
-            _ => panic!("Expected anyOf nullable integer with constraints to parse correctly")
+        }
+
+        #[test]
+        fn parse_array_of_objects() {
+            let schema = json!({
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "name": {"type": "string"}
+                    },
+                    "required": ["id"]
+                }
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Array { schema: item_schema, .. }) => {
+                    match item_schema.as_ref() {
+                        SchemaState::Object { required, optional } => {
+                            assert!(required.contains_key("id"));
+                            assert!(optional.contains_key("name"));
+                        }
+                        _ => panic!("Expected array items to be objects")
+                    }
+                }
+                _ => panic!("Expected array of objects to parse correctly"),
+            }
         }
     }
 
-    #[test]
-    fn parse_nullable_oneof_reversed_order() {
-        let schema = json!({
-            "oneOf": [
-                {"type": "null"},
-                {"type": "boolean"}
-            ]
-        });
-        
-        let result = parse_json_schema(&schema);
-        
-        match result {
-            Ok(SchemaState::Nullable(inner)) => {
-                match inner.as_ref() {
-                    SchemaState::Boolean => {
-                        // Success case - order shouldn't matter
+    mod nullable_types {
+        use super::*;
+
+        #[test]
+        fn parse_nullable_string() {
+            let schema = json!({"type": ["string", "null"]});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::String(_) => {}
+                        _ => panic!("Expected nullable string to contain string type")
                     }
-                    _ => panic!("Expected nullable boolean")
                 }
+                _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
             }
-            _ => panic!("Expected oneOf nullable boolean to parse correctly")
+        }
+
+        #[test]
+        fn parse_nullable_integer() {
+            let schema = json!({"type": ["integer", "null"]});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::Number(NumberType::Integer { .. }) => {}
+                        _ => panic!("Expected nullable integer to contain integer type")
+                    }
+                }
+                _ => panic!("Expected nullable integer to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_array() {
+            let schema = json!({
+                "type": ["array", "null"],
+                "items": {"type": "string"}
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::Array { .. } => {}
+                        _ => panic!("Expected nullable array to contain array type")
+                    }
+                }
+                _ => panic!("Expected nullable array to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_object() {
+            let schema = json!({
+                "type": ["object", "null"],
+                "properties": {"name": {"type": "string"}}
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::Object { .. } => {}
+                        _ => panic!("Expected nullable object to contain object type")
+                    }
+                }
+                _ => panic!("Expected nullable object to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_reversed_order() {
+            let schema = json!({"type": ["null", "string"]});
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::String(_) => {}
+                        _ => panic!("Expected nullable string to contain string type")
+                    }
+                }
+                _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_anyof_pattern() {
+            let schema = json!({
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "null"}
+                ]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::String(_) => {}
+                        _ => panic!("Expected nullable string via anyOf to contain string type")
+                    }
+                }
+                _ => panic!("Expected anyOf nullable pattern to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_oneof_pattern() {
+            let schema = json!({
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "null"}
+                ]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::String(_) => {}
+                        _ => panic!("Expected nullable string via oneOf to contain string type")
+                    }
+                }
+                _ => panic!("Expected oneOf nullable pattern to parse as SchemaState::Nullable")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_anyof_with_constraints() {
+            let schema = json!({
+                "anyOf": [
+                    {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                    },
+                    {"type": "null"}
+                ]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::Number(NumberType::Integer { min, max }) => {
+                            assert_eq!(*min, 1);
+                            assert_eq!(*max, 100);
+                        }
+                        _ => panic!("Expected nullable integer with constraints")
+                    }
+                }
+                _ => panic!("Expected anyOf nullable integer with constraints to parse correctly")
+            }
+        }
+
+        #[test]
+        fn parse_nullable_oneof_reversed_order() {
+            let schema = json!({
+                "oneOf": [
+                    {"type": "null"},
+                    {"type": "boolean"}
+                ]
+            });
+            let result = parse_json_schema(&schema);
+            match result {
+                Ok(SchemaState::Nullable(inner)) => {
+                    match inner.as_ref() {
+                        SchemaState::Boolean => {}
+                        _ => panic!("Expected nullable boolean")
+                    }
+                }
+                _ => panic!("Expected oneOf nullable boolean to parse correctly")
+            }
         }
     }
 }
