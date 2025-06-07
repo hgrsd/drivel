@@ -6,7 +6,6 @@ pub trait ToJsonSchema {
     fn to_json_schema_document(&self) -> serde_json::Value {
         let mut doc = serde_json::json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://example.com/schema",
             "title": "Inferred Schema",
             "description": "Schema inferred by drivel from sample data"
         });
@@ -1001,7 +1000,6 @@ mod tests {
                     document["$schema"],
                     "https://json-schema.org/draft/2020-12/schema"
                 );
-                assert_eq!(document["$id"], "https://example.com/schema");
                 assert_eq!(document["title"], "Inferred Schema");
                 assert_eq!(
                     document["description"],
