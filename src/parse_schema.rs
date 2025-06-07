@@ -44,7 +44,9 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
 fn parse_string_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, ParseSchemaError> {
     let (min_length, max_length) = parse_string_length_constraints(schema_obj)?;
     
-    if let Some(format_value) = schema_obj.get("format") {
+    if let Some(enum_value) = schema_obj.get("enum") {
+        parse_string_enum(enum_value)
+    } else if let Some(format_value) = schema_obj.get("format") {
         parse_string_with_format(format_value, min_length, max_length)
     } else {
         Ok(SchemaState::String(create_unknown_string_type(min_length, max_length)))
@@ -97,6 +99,21 @@ fn create_unknown_string_type(min_length: Option<usize>, max_length: Option<usiz
         min_length,
         max_length,
     }
+}
+
+fn parse_string_enum(enum_value: &Value) -> Result<SchemaState, ParseSchemaError> {
+    let enum_array = enum_value.as_array()
+        .ok_or_else(|| ParseSchemaError::InvalidSchema("Enum field must be an array".to_string()))?;
+    
+    let mut variants = std::collections::HashSet::new();
+    
+    for item in enum_array {
+        let string_value = item.as_str()
+            .ok_or_else(|| ParseSchemaError::InvalidSchema("All enum values must be strings".to_string()))?;
+        variants.insert(string_value.to_string());
+    }
+    
+    Ok(SchemaState::String(StringType::Enum { variants }))
 }
 
 fn parse_number_type(schema_obj: &Map<String, Value>, is_integer: bool) -> Result<SchemaState, ParseSchemaError> {
@@ -478,6 +495,47 @@ mod tests {
             }
             _ => {
                 panic!("Expected null schema to parse successfully");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_string_enum_schema() {
+        let schema = json!({
+            "type": "string",
+            "enum": ["foo", "bar", "baz"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::String(crate::schema::StringType::Enum { variants })) => {
+                assert_eq!(variants.len(), 3);
+                assert!(variants.contains("foo"));
+                assert!(variants.contains("bar"));
+                assert!(variants.contains("baz"));
+            }
+            _ => {
+                panic!("Expected string enum schema to parse to StringType::Enum");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_string_enum_empty() {
+        let schema = json!({
+            "type": "string",
+            "enum": []
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::String(crate::schema::StringType::Enum { variants })) => {
+                assert_eq!(variants.len(), 0);
+            }
+            _ => {
+                panic!("Expected empty string enum schema to parse to StringType::Enum");
             }
         }
     }
