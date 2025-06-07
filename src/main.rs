@@ -78,7 +78,7 @@ fn main() {
                 std::process::exit(1);
             }
         };
-        
+
         match drivel::parse_json_schema(&json) {
             Ok(schema) => schema,
             Err(err) => {
