@@ -25,12 +25,36 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
     let schema_obj = schema_json.as_object()
         .ok_or_else(|| ParseSchemaError::InvalidSchema("Schema must be an object".to_string()))?;
     
+    // Check for anyOf/oneOf nullable patterns first
+    if let Some(any_of) = schema_obj.get("anyOf") {
+        if let Some(nullable_schema) = try_parse_nullable_anyof_oneof(any_of)? {
+            return Ok(nullable_schema);
+        }
+        return Err(ParseSchemaError::UnsupportedFeature("anyOf patterns other than nullable not supported yet".to_string()));
+    }
+    
+    if let Some(one_of) = schema_obj.get("oneOf") {
+        if let Some(nullable_schema) = try_parse_nullable_anyof_oneof(one_of)? {
+            return Ok(nullable_schema);
+        }
+        return Err(ParseSchemaError::UnsupportedFeature("oneOf patterns other than nullable not supported yet".to_string()));
+    }
+    
+    // Handle type field patterns
     let type_field = schema_obj.get("type")
-        .ok_or_else(|| ParseSchemaError::InvalidSchema("Schema must have a 'type' field".to_string()))?;
+        .ok_or_else(|| ParseSchemaError::InvalidSchema("Schema must have a 'type' field, 'anyOf', or 'oneOf'".to_string()))?;
     
-    let type_str = type_field.as_str()
-        .ok_or_else(|| ParseSchemaError::InvalidSchema("Type field must be a string".to_string()))?;
-    
+    // Handle nullable types (arrays) vs single types (strings)
+    if let Some(type_array) = type_field.as_array() {
+        parse_nullable_type(schema_obj, type_array)
+    } else if let Some(type_str) = type_field.as_str() {
+        parse_single_type(schema_obj, type_str)
+    } else {
+        Err(ParseSchemaError::InvalidSchema("Type field must be a string or array".to_string()))
+    }
+}
+
+fn parse_single_type(schema_obj: &Map<String, Value>, type_str: &str) -> Result<SchemaState, ParseSchemaError> {
     match type_str {
         "string" => parse_string_type(schema_obj),
         "number" => parse_number_type(schema_obj, false),
@@ -40,6 +64,83 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
         "object" => parse_object_type(schema_obj),
         "array" => parse_array_type(schema_obj),
         _ => Err(ParseSchemaError::UnsupportedFeature(format!("Type '{}' not supported yet", type_str)))
+    }
+}
+
+fn parse_nullable_type(schema_obj: &Map<String, Value>, type_array: &[Value]) -> Result<SchemaState, ParseSchemaError> {
+    if type_array.len() != 2 {
+        return Err(ParseSchemaError::UnsupportedFeature("Only nullable types with exactly 2 elements are supported".to_string()));
+    }
+    
+    let mut non_null_type = None;
+    let mut has_null = false;
+    
+    for type_value in type_array {
+        if let Some(type_str) = type_value.as_str() {
+            if type_str == "null" {
+                has_null = true;
+            } else if non_null_type.is_none() {
+                non_null_type = Some(type_str);
+            } else {
+                return Err(ParseSchemaError::UnsupportedFeature("Only one non-null type is supported in nullable types".to_string()));
+            }
+        } else {
+            return Err(ParseSchemaError::InvalidSchema("All type array elements must be strings".to_string()));
+        }
+    }
+    
+    if !has_null {
+        return Err(ParseSchemaError::InvalidSchema("Nullable type array must contain 'null'".to_string()));
+    }
+    
+    let inner_type = non_null_type
+        .ok_or_else(|| ParseSchemaError::InvalidSchema("Nullable type array must contain a non-null type".to_string()))?;
+    
+    let inner_schema = parse_single_type(schema_obj, inner_type)?;
+    Ok(SchemaState::Nullable(Box::new(inner_schema)))
+}
+
+fn try_parse_nullable_anyof_oneof(schema_array: &Value) -> Result<Option<SchemaState>, ParseSchemaError> {
+    let array = schema_array.as_array()
+        .ok_or_else(|| ParseSchemaError::InvalidSchema("anyOf/oneOf must be an array".to_string()))?;
+    
+    if array.len() != 2 {
+        return Ok(None); // Not a simple nullable pattern
+    }
+    
+    let mut null_schema = None;
+    let mut type_schema = None;
+    
+    for item in array {
+        let item_obj = item.as_object()
+            .ok_or_else(|| ParseSchemaError::InvalidSchema("anyOf/oneOf items must be objects".to_string()))?;
+        
+        if let Some(type_field) = item_obj.get("type") {
+            if let Some(type_str) = type_field.as_str() {
+                if type_str == "null" {
+                    null_schema = Some(item);
+                } else if type_schema.is_none() {
+                    type_schema = Some(item);
+                } else {
+                    return Ok(None); // Multiple non-null types, not a simple nullable pattern
+                }
+            } else {
+                return Ok(None); // Complex type, not a simple nullable pattern
+            }
+        } else {
+            return Ok(None); // No type field, not a simple nullable pattern
+        }
+    }
+    
+    if null_schema.is_some() && type_schema.is_some() {
+        let type_obj = type_schema.unwrap().as_object().unwrap();
+        let type_field = type_obj.get("type").unwrap();
+        let type_str = type_field.as_str().unwrap();
+        
+        let inner_schema = parse_single_type(type_obj, type_str)?;
+        Ok(Some(SchemaState::Nullable(Box::new(inner_schema))))
+    } else {
+        Ok(None) // Not a nullable pattern
     }
 }
 
@@ -265,7 +366,7 @@ fn warn_about_unsupported_array_features(schema_obj: &Map<String, Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::StringType;
+    use crate::schema::{StringType, NumberType};
     use serde_json::json;
 
     #[test]
@@ -848,6 +949,222 @@ mod tests {
             _ => {
                 panic!("Expected array of objects to parse correctly");
             }
+        }
+    }
+
+    // Nullable type tests
+    #[test]
+    fn parse_nullable_string() {
+        let schema = json!({
+            "type": ["string", "null"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::String(_) => {
+                        // Success case
+                    }
+                    _ => panic!("Expected nullable string to contain string type")
+                }
+            }
+            _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_integer() {
+        let schema = json!({
+            "type": ["integer", "null"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::Number(NumberType::Integer { .. }) => {
+                        // Success case  
+                    }
+                    _ => panic!("Expected nullable integer to contain integer type")
+                }
+            }
+            _ => panic!("Expected nullable integer to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_array() {
+        let schema = json!({
+            "type": ["array", "null"],
+            "items": {
+                "type": "string"
+            }
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::Array { .. } => {
+                        // Success case
+                    }
+                    _ => panic!("Expected nullable array to contain array type")
+                }
+            }
+            _ => panic!("Expected nullable array to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_object() {
+        let schema = json!({
+            "type": ["object", "null"],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::Object { .. } => {
+                        // Success case
+                    }
+                    _ => panic!("Expected nullable object to contain object type")
+                }
+            }
+            _ => panic!("Expected nullable object to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_reversed_order() {
+        let schema = json!({
+            "type": ["null", "string"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::String(_) => {
+                        // Success case - order shouldn't matter
+                    }
+                    _ => panic!("Expected nullable string to contain string type")
+                }
+            }
+            _ => panic!("Expected nullable string to parse as SchemaState::Nullable")
+        }
+    }
+
+    // Test other nullable patterns that should work but don't yet
+    #[test]
+    fn parse_nullable_anyof_pattern() {
+        let schema = json!({
+            "anyOf": [
+                {"type": "string"},
+                {"type": "null"}
+            ]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::String(_) => {
+                        // Success case
+                    }
+                    _ => panic!("Expected nullable string via anyOf to contain string type")
+                }
+            }
+            _ => panic!("Expected anyOf nullable pattern to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_oneof_pattern() {
+        let schema = json!({
+            "oneOf": [
+                {"type": "string"},
+                {"type": "null"}
+            ]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::String(_) => {
+                        // Success case
+                    }
+                    _ => panic!("Expected nullable string via oneOf to contain string type")
+                }
+            }
+            _ => panic!("Expected oneOf nullable pattern to parse as SchemaState::Nullable")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_anyof_with_constraints() {
+        let schema = json!({
+            "anyOf": [
+                {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                },
+                {"type": "null"}
+            ]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::Number(NumberType::Integer { min, max }) => {
+                        assert_eq!(*min, 1);
+                        assert_eq!(*max, 100);
+                    }
+                    _ => panic!("Expected nullable integer with constraints")
+                }
+            }
+            _ => panic!("Expected anyOf nullable integer with constraints to parse correctly")
+        }
+    }
+
+    #[test]
+    fn parse_nullable_oneof_reversed_order() {
+        let schema = json!({
+            "oneOf": [
+                {"type": "null"},
+                {"type": "boolean"}
+            ]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Nullable(inner)) => {
+                match inner.as_ref() {
+                    SchemaState::Boolean => {
+                        // Success case - order shouldn't matter
+                    }
+                    _ => panic!("Expected nullable boolean")
+                }
+            }
+            _ => panic!("Expected oneOf nullable boolean to parse correctly")
         }
     }
 }
