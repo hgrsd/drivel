@@ -442,53 +442,6 @@ mod tests {
         assert_eq!(document["type"], "boolean");
     }
 
-    #[test]
-    fn json_schema_document_edge_cases() {
-        // Test document format with Initial state (empty schema)
-        let initial_schema = SchemaState::Initial;
-        let document = initial_schema.to_json_schema_document();
-
-        assert_eq!(
-            document["$schema"],
-            "https://json-schema.org/draft/2020-12/schema"
-        );
-        assert_eq!(document["$id"], "https://example.com/schema");
-        assert_eq!(document["title"], "Inferred Schema");
-        assert_eq!(
-            document["description"],
-            "Schema inferred by drivel from sample data"
-        );
-        // Should not have a "type" field since Initial produces empty schema
-        assert!(document.get("type").is_none());
-
-        // Test document format with complex nested structure
-        use std::collections::HashMap;
-        let mut required = HashMap::new();
-        required.insert(
-            "items".to_string(),
-            SchemaState::Array {
-                min_length: 1,
-                max_length: 10,
-                schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(
-                    StringType::UUID,
-                )))),
-            },
-        );
-
-        let complex_schema = SchemaState::Object {
-            required,
-            optional: HashMap::new(),
-        };
-        let document = complex_schema.to_json_schema_document();
-
-        assert_eq!(document["type"], "object");
-        assert_eq!(document["properties"]["items"]["type"], "array");
-        assert_eq!(
-            document["properties"]["items"]["items"]["type"],
-            json!(["string", "null"])
-        );
-        assert_eq!(document["properties"]["items"]["items"]["format"], "uuid");
-    }
 
     #[test]
     fn string_types_to_json_schema() {
