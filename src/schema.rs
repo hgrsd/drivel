@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 pub trait ToJsonSchema {
     fn to_json_schema(&self) -> serde_json::Value;
-    
+
     fn to_json_schema_document(&self) -> serde_json::Value {
         let mut doc = serde_json::json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -10,13 +10,13 @@ pub trait ToJsonSchema {
             "title": "Inferred Schema",
             "description": "Schema inferred by drivel from sample data"
         });
-        
+
         if let serde_json::Value::Object(schema_obj) = self.to_json_schema() {
             if let serde_json::Value::Object(doc_obj) = &mut doc {
                 doc_obj.extend(schema_obj);
             }
         }
-        
+
         doc
     }
 }
@@ -274,39 +274,43 @@ impl ToJsonSchema for SchemaState {
             SchemaState::Number(number_type) => number_type.to_json_schema(),
             SchemaState::Nullable(inner) => {
                 let mut inner_schema = inner.to_json_schema();
-                
+
                 // Convert single type to array with null
                 if let Some(type_value) = inner_schema.get("type") {
                     if let Some(type_str) = type_value.as_str() {
                         inner_schema["type"] = serde_json::json!([type_str, "null"]);
                     }
                 }
-                
+
                 inner_schema
-            },
-            SchemaState::Array { min_length, max_length, schema } => {
+            }
+            SchemaState::Array {
+                min_length,
+                max_length,
+                schema,
+            } => {
                 serde_json::json!({
                     "type": "array",
                     "items": schema.to_json_schema(),
                     "minItems": min_length,
                     "maxItems": max_length
                 })
-            },
+            }
             SchemaState::Object { required, optional } => {
                 let mut properties = serde_json::Map::new();
                 let mut required_fields = Vec::new();
-                
+
                 // Add required fields
                 for (key, schema) in required {
                     properties.insert(key.clone(), schema.to_json_schema());
                     required_fields.push(key.clone());
                 }
-                
+
                 // Add optional fields
                 for (key, schema) in optional {
                     properties.insert(key.clone(), schema.to_json_schema());
                 }
-                
+
                 serde_json::json!({
                     "type": "object",
                     "properties": properties,
@@ -321,7 +325,11 @@ impl ToJsonSchema for SchemaState {
 impl ToJsonSchema for StringType {
     fn to_json_schema(&self) -> serde_json::Value {
         match self {
-            StringType::Unknown { min_length, max_length, .. } => {
+            StringType::Unknown {
+                min_length,
+                max_length,
+                ..
+            } => {
                 let mut schema = serde_json::json!({ "type": "string" });
                 if let Some(min) = min_length {
                     schema["minLength"] = serde_json::Value::Number((*min).into());
@@ -405,35 +413,32 @@ mod tests {
 
         // Test Null
         let null_schema = SchemaState::Null;
-        assert_eq!(
-            null_schema.to_json_schema(),
-            json!({ "type": "null" })
-        );
+        assert_eq!(null_schema.to_json_schema(), json!({ "type": "null" }));
 
         // Test Initial state (should be empty schema)
         let initial_schema = SchemaState::Initial;
-        assert_eq!(
-            initial_schema.to_json_schema(),
-            json!({})
-        );
+        assert_eq!(initial_schema.to_json_schema(), json!({}));
 
         // Test Indefinite state (should be empty schema)
         let indefinite_schema = SchemaState::Indefinite;
-        assert_eq!(
-            indefinite_schema.to_json_schema(),
-            json!({})
-        );
+        assert_eq!(indefinite_schema.to_json_schema(), json!({}));
     }
 
     #[test]
     fn json_schema_document_format() {
         let boolean_schema = SchemaState::Boolean;
         let document = boolean_schema.to_json_schema_document();
-        
-        assert_eq!(document["$schema"], "https://json-schema.org/draft/2020-12/schema");
+
+        assert_eq!(
+            document["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
         assert_eq!(document["$id"], "https://example.com/schema");
         assert_eq!(document["title"], "Inferred Schema");
-        assert_eq!(document["description"], "Schema inferred by drivel from sample data");
+        assert_eq!(
+            document["description"],
+            "Schema inferred by drivel from sample data"
+        );
         assert_eq!(document["type"], "boolean");
     }
 
@@ -442,29 +447,46 @@ mod tests {
         // Test document format with Initial state (empty schema)
         let initial_schema = SchemaState::Initial;
         let document = initial_schema.to_json_schema_document();
-        
-        assert_eq!(document["$schema"], "https://json-schema.org/draft/2020-12/schema");
+
+        assert_eq!(
+            document["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
         assert_eq!(document["$id"], "https://example.com/schema");
         assert_eq!(document["title"], "Inferred Schema");
-        assert_eq!(document["description"], "Schema inferred by drivel from sample data");
+        assert_eq!(
+            document["description"],
+            "Schema inferred by drivel from sample data"
+        );
         // Should not have a "type" field since Initial produces empty schema
         assert!(document.get("type").is_none());
 
         // Test document format with complex nested structure
         use std::collections::HashMap;
         let mut required = HashMap::new();
-        required.insert("items".to_string(), SchemaState::Array {
-            min_length: 1,
-            max_length: 10,
-            schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(StringType::UUID)))),
-        });
-        
-        let complex_schema = SchemaState::Object { required, optional: HashMap::new() };
+        required.insert(
+            "items".to_string(),
+            SchemaState::Array {
+                min_length: 1,
+                max_length: 10,
+                schema: Box::new(SchemaState::Nullable(Box::new(SchemaState::String(
+                    StringType::UUID,
+                )))),
+            },
+        );
+
+        let complex_schema = SchemaState::Object {
+            required,
+            optional: HashMap::new(),
+        };
         let document = complex_schema.to_json_schema_document();
-        
+
         assert_eq!(document["type"], "object");
         assert_eq!(document["properties"]["items"]["type"], "array");
-        assert_eq!(document["properties"]["items"]["items"]["type"], json!(["string", "null"]));
+        assert_eq!(
+            document["properties"]["items"]["items"]["type"],
+            json!(["string", "null"])
+        );
         assert_eq!(document["properties"]["items"]["items"]["format"], "uuid");
     }
 
@@ -515,10 +537,7 @@ mod tests {
             min_length: None,
             max_length: None,
         });
-        assert_eq!(
-            no_constraints.to_json_schema(),
-            json!({ "type": "string" })
-        );
+        assert_eq!(no_constraints.to_json_schema(), json!({ "type": "string" }));
     }
 
     #[test]
@@ -597,8 +616,10 @@ mod tests {
         enum_variants.insert("red".to_string());
         enum_variants.insert("green".to_string());
         enum_variants.insert("blue".to_string());
-        
-        let enum_string = SchemaState::String(StringType::Enum { variants: enum_variants });
+
+        let enum_string = SchemaState::String(StringType::Enum {
+            variants: enum_variants,
+        });
         let result = enum_string.to_json_schema();
         assert_eq!(result["type"], "string");
         assert!(result["enum"].is_array());
@@ -608,8 +629,8 @@ mod tests {
 
     #[test]
     fn string_enum_empty_variants_to_json_schema() {
-        let empty_enum = SchemaState::String(StringType::Enum { 
-            variants: std::collections::HashSet::new() 
+        let empty_enum = SchemaState::String(StringType::Enum {
+            variants: std::collections::HashSet::new(),
         });
         let result = empty_enum.to_json_schema();
         assert_eq!(result["type"], "string");
@@ -620,7 +641,9 @@ mod tests {
     fn string_enum_single_variant_to_json_schema() {
         let mut single_variant = std::collections::HashSet::new();
         single_variant.insert("only".to_string());
-        let single_enum = SchemaState::String(StringType::Enum { variants: single_variant });
+        let single_enum = SchemaState::String(StringType::Enum {
+            variants: single_variant,
+        });
         let result = single_enum.to_json_schema();
         assert_eq!(result["type"], "string");
         assert_eq!(result["enum"], json!(["only"]));
@@ -640,7 +663,10 @@ mod tests {
         );
 
         // Test float
-        let float = SchemaState::Number(NumberType::Float { min: 1.5, max: 99.9 });
+        let float = SchemaState::Number(NumberType::Float {
+            min: 1.5,
+            max: 99.9,
+        });
         assert_eq!(
             float.to_json_schema(),
             json!({
@@ -666,7 +692,10 @@ mod tests {
 
     #[test]
     fn number_integer_negative_range_to_json_schema() {
-        let negative_int = SchemaState::Number(NumberType::Integer { min: -100, max: -10 });
+        let negative_int = SchemaState::Number(NumberType::Integer {
+            min: -100,
+            max: -10,
+        });
         assert_eq!(
             negative_int.to_json_schema(),
             json!({
@@ -692,7 +721,10 @@ mod tests {
 
     #[test]
     fn number_float_single_value_to_json_schema() {
-        let single_value_float = SchemaState::Number(NumberType::Float { min: 3.14, max: 3.14 });
+        let single_value_float = SchemaState::Number(NumberType::Float {
+            min: 3.14,
+            max: 3.14,
+        });
         assert_eq!(
             single_value_float.to_json_schema(),
             json!({
@@ -705,7 +737,10 @@ mod tests {
 
     #[test]
     fn number_float_negative_range_to_json_schema() {
-        let negative_float = SchemaState::Number(NumberType::Float { min: -99.9, max: -1.1 });
+        let negative_float = SchemaState::Number(NumberType::Float {
+            min: -99.9,
+            max: -1.1,
+        });
         assert_eq!(
             negative_float.to_json_schema(),
             json!({
@@ -719,7 +754,8 @@ mod tests {
     #[test]
     fn nullable_types_to_json_schema() {
         // Test nullable string
-        let nullable_string = SchemaState::Nullable(Box::new(SchemaState::String(StringType::UUID)));
+        let nullable_string =
+            SchemaState::Nullable(Box::new(SchemaState::String(StringType::UUID)));
         assert_eq!(
             nullable_string.to_json_schema(),
             json!({
@@ -729,7 +765,11 @@ mod tests {
         );
 
         // Test nullable integer
-        let nullable_int = SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer { min: 1, max: 10 })));
+        let nullable_int =
+            SchemaState::Nullable(Box::new(SchemaState::Number(NumberType::Integer {
+                min: 1,
+                max: 10,
+            })));
         assert_eq!(
             nullable_int.to_json_schema(),
             json!({
@@ -765,8 +805,11 @@ mod tests {
     fn nullable_object_to_json_schema() {
         use std::collections::HashMap;
         let mut required = HashMap::new();
-        required.insert("id".to_string(), SchemaState::Number(NumberType::Integer { min: 1, max: 100 }));
-        
+        required.insert(
+            "id".to_string(),
+            SchemaState::Number(NumberType::Integer { min: 1, max: 100 }),
+        );
+
         let nullable_object = SchemaState::Nullable(Box::new(SchemaState::Object {
             required,
             optional: HashMap::new(),
@@ -821,12 +864,15 @@ mod tests {
     fn array_of_objects_to_json_schema() {
         use std::collections::HashMap;
         let mut required = HashMap::new();
-        required.insert("name".to_string(), SchemaState::String(StringType::Unknown {
-            strings_seen: vec!["test".to_string()],
-            chars_seen: vec!['t', 'e', 's', 't'],
-            min_length: Some(1),
-            max_length: Some(50),
-        }));
+        required.insert(
+            "name".to_string(),
+            SchemaState::String(StringType::Unknown {
+                strings_seen: vec!["test".to_string()],
+                chars_seen: vec!['t', 'e', 's', 't'],
+                min_length: Some(1),
+                max_length: Some(50),
+            }),
+        );
 
         let array_of_objects = SchemaState::Array {
             min_length: 1,
@@ -852,7 +898,10 @@ mod tests {
             schema: Box::new(SchemaState::Array {
                 min_length: 2,
                 max_length: 4,
-                schema: Box::new(SchemaState::Number(NumberType::Integer { min: 1, max: 100 })),
+                schema: Box::new(SchemaState::Number(NumberType::Integer {
+                    min: 1,
+                    max: 100,
+                })),
             }),
         };
         let result = nested_array.to_json_schema();
@@ -868,21 +917,27 @@ mod tests {
     #[test]
     fn object_types_to_json_schema() {
         use std::collections::HashMap;
-        
+
         let mut required = HashMap::new();
-        required.insert("id".to_string(), SchemaState::Number(NumberType::Integer { min: 1, max: 1000 }));
-        
+        required.insert(
+            "id".to_string(),
+            SchemaState::Number(NumberType::Integer { min: 1, max: 1000 }),
+        );
+
         let mut optional = HashMap::new();
-        optional.insert("name".to_string(), SchemaState::String(StringType::Unknown {
-            strings_seen: vec!["test".to_string()],
-            chars_seen: vec!['t', 'e', 's', 't'],
-            min_length: Some(1),
-            max_length: Some(50),
-        }));
-        
+        optional.insert(
+            "name".to_string(),
+            SchemaState::String(StringType::Unknown {
+                strings_seen: vec!["test".to_string()],
+                chars_seen: vec!['t', 'e', 's', 't'],
+                min_length: Some(1),
+                max_length: Some(50),
+            }),
+        );
+
         let object_schema = SchemaState::Object { required, optional };
         let result = object_schema.to_json_schema();
-        
+
         assert_eq!(result["type"], "object");
         assert_eq!(result["additionalProperties"], false);
         assert_eq!(result["required"], json!(["id"]));
@@ -908,9 +963,12 @@ mod tests {
     fn object_required_only_to_json_schema() {
         use std::collections::HashMap;
         let mut required = HashMap::new();
-        required.insert("id".to_string(), SchemaState::Number(NumberType::Integer { min: 1, max: 100 }));
+        required.insert(
+            "id".to_string(),
+            SchemaState::Number(NumberType::Integer { min: 1, max: 100 }),
+        );
         required.insert("status".to_string(), SchemaState::Boolean);
-        
+
         let required_only_object = SchemaState::Object {
             required,
             optional: HashMap::new(),
@@ -918,22 +976,34 @@ mod tests {
         let result = required_only_object.to_json_schema();
         assert_eq!(result["type"], "object");
         assert_eq!(result["required"].as_array().unwrap().len(), 2);
-        assert!(result["required"].as_array().unwrap().contains(&json!("id")));
-        assert!(result["required"].as_array().unwrap().contains(&json!("status")));
+        assert!(result["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("id")));
+        assert!(result["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("status")));
     }
 
     #[test]
     fn object_optional_only_to_json_schema() {
         use std::collections::HashMap;
         let mut optional = HashMap::new();
-        optional.insert("description".to_string(), SchemaState::String(StringType::Unknown {
-            strings_seen: vec!["test".to_string()],
-            chars_seen: vec!['t', 'e', 's', 't'],
-            min_length: None,
-            max_length: None,
-        }));
-        optional.insert("count".to_string(), SchemaState::Number(NumberType::Integer { min: 0, max: 10 }));
-        
+        optional.insert(
+            "description".to_string(),
+            SchemaState::String(StringType::Unknown {
+                strings_seen: vec!["test".to_string()],
+                chars_seen: vec!['t', 'e', 's', 't'],
+                min_length: None,
+                max_length: None,
+            }),
+        );
+        optional.insert(
+            "count".to_string(),
+            SchemaState::Number(NumberType::Integer { min: 0, max: 10 }),
+        );
+
         let optional_only_object = SchemaState::Object {
             required: HashMap::new(),
             optional,
@@ -949,14 +1019,20 @@ mod tests {
     fn object_nested_to_json_schema() {
         use std::collections::HashMap;
         let mut inner_required = HashMap::new();
-        inner_required.insert("nested_id".to_string(), SchemaState::Number(NumberType::Integer { min: 1, max: 10 }));
-        
+        inner_required.insert(
+            "nested_id".to_string(),
+            SchemaState::Number(NumberType::Integer { min: 1, max: 10 }),
+        );
+
         let mut outer_required = HashMap::new();
-        outer_required.insert("inner".to_string(), SchemaState::Object {
-            required: inner_required,
-            optional: HashMap::new(),
-        });
-        
+        outer_required.insert(
+            "inner".to_string(),
+            SchemaState::Object {
+                required: inner_required,
+                optional: HashMap::new(),
+            },
+        );
+
         let nested_object = SchemaState::Object {
             required: outer_required,
             optional: HashMap::new(),
@@ -964,7 +1040,13 @@ mod tests {
         let result = nested_object.to_json_schema();
         assert_eq!(result["type"], "object");
         assert_eq!(result["properties"]["inner"]["type"], "object");
-        assert_eq!(result["properties"]["inner"]["properties"]["nested_id"]["type"], "integer");
-        assert_eq!(result["properties"]["inner"]["required"], json!(["nested_id"]));
+        assert_eq!(
+            result["properties"]["inner"]["properties"]["nested_id"]["type"],
+            "integer"
+        );
+        assert_eq!(
+            result["properties"]["inner"]["required"],
+            json!(["nested_id"])
+        );
     }
 }
