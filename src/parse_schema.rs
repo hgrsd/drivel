@@ -37,6 +37,8 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
         "integer" => parse_number_type(schema_obj, true),
         "boolean" => Ok(SchemaState::Boolean),
         "null" => Ok(SchemaState::Null),
+        "object" => parse_object_type(schema_obj),
+        "array" => parse_array_type(schema_obj),
         _ => Err(ParseSchemaError::UnsupportedFeature(format!("Type '{}' not supported yet", type_str)))
     }
 }
@@ -54,22 +56,8 @@ fn parse_string_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, Par
 }
 
 fn parse_string_length_constraints(schema_obj: &Map<String, Value>) -> Result<(Option<usize>, Option<usize>), ParseSchemaError> {
-    let min_length = if let Some(min_val) = schema_obj.get("minLength") {
-        Some(min_val.as_u64()
-            .ok_or_else(|| ParseSchemaError::InvalidSchema("minLength must be a number".to_string()))? 
-            as usize)
-    } else {
-        None
-    };
-    
-    let max_length = if let Some(max_val) = schema_obj.get("maxLength") {
-        Some(max_val.as_u64()
-            .ok_or_else(|| ParseSchemaError::InvalidSchema("maxLength must be a number".to_string()))? 
-            as usize)
-    } else {
-        None
-    };
-    
+    let min_length = parse_optional_usize_field(schema_obj, "minLength")?;
+    let max_length = parse_optional_usize_field(schema_obj, "maxLength")?;
     Ok((min_length, max_length))
 }
 
@@ -158,6 +146,119 @@ fn warn_about_unsupported_number_features(schema_obj: &Map<String, Value>) {
     
     if schema_obj.contains_key("multipleOf") {
         eprintln!("Warning: multipleOf constraint not supported, ignoring");
+    }
+}
+
+fn parse_object_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, ParseSchemaError> {
+    let empty_map = serde_json::Map::new();
+    let properties = schema_obj.get("properties")
+        .and_then(|p| p.as_object())
+        .unwrap_or(&empty_map);
+    
+    let required_names = parse_required_field_names(schema_obj);
+    let (required_fields, optional_fields) = parse_object_properties(properties, &required_names)?;
+    
+    warn_about_unsupported_object_features(schema_obj);
+    
+    Ok(SchemaState::Object {
+        required: required_fields,
+        optional: optional_fields,
+    })
+}
+
+fn parse_required_field_names(schema_obj: &Map<String, Value>) -> std::collections::HashSet<String> {
+    schema_obj.get("required")
+        .and_then(|r| r.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_object_properties(
+    properties: &Map<String, Value>, 
+    required_names: &std::collections::HashSet<String>
+) -> Result<(std::collections::HashMap<String, SchemaState>, std::collections::HashMap<String, SchemaState>), ParseSchemaError> {
+    let mut required_fields = std::collections::HashMap::new();
+    let mut optional_fields = std::collections::HashMap::new();
+    
+    for (property_name, property_schema) in properties {
+        let parsed_schema = parse_json_schema(property_schema)?;
+        
+        if required_names.contains(property_name) {
+            required_fields.insert(property_name.clone(), parsed_schema);
+        } else {
+            optional_fields.insert(property_name.clone(), parsed_schema);
+        }
+    }
+    
+    Ok((required_fields, optional_fields))
+}
+
+fn warn_about_unsupported_object_features(schema_obj: &Map<String, Value>) {
+    if let Some(additional_props) = schema_obj.get("additionalProperties") {
+        if additional_props.as_bool() == Some(true) {
+            eprintln!("Warning: additionalProperties: true not fully supported, allowing any additional properties");
+        } else if additional_props.is_object() {
+            eprintln!("Warning: additionalProperties schema not supported, ignoring");
+        }
+    }
+    
+    if schema_obj.contains_key("patternProperties") {
+        eprintln!("Warning: patternProperties not supported, ignoring");
+    }
+}
+
+fn parse_array_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, ParseSchemaError> {
+    // Parse the items schema
+    let items_schema = schema_obj.get("items")
+        .ok_or_else(|| ParseSchemaError::InvalidSchema("Array schema must have an 'items' field".to_string()))?;
+    
+    let parsed_items_schema = parse_json_schema(items_schema)?;
+    
+    // Parse array constraints
+    let (min_items, max_items) = parse_array_constraints(schema_obj)?;
+    
+    // Warn about unsupported array features
+    warn_about_unsupported_array_features(schema_obj);
+    
+    Ok(SchemaState::Array {
+        min_length: min_items,
+        max_length: max_items,
+        schema: Box::new(parsed_items_schema),
+    })
+}
+
+fn parse_array_constraints(schema_obj: &Map<String, Value>) -> Result<(usize, usize), ParseSchemaError> {
+    let min_items = parse_optional_usize_field(schema_obj, "minItems")?.unwrap_or(0);
+    let max_items = parse_optional_usize_field(schema_obj, "maxItems")?.unwrap_or(usize::MAX);
+    Ok((min_items, max_items))
+}
+
+fn parse_optional_usize_field(schema_obj: &Map<String, Value>, field_name: &str) -> Result<Option<usize>, ParseSchemaError> {
+    if let Some(value) = schema_obj.get(field_name) {
+        let number = value.as_u64()
+            .ok_or_else(|| ParseSchemaError::InvalidSchema(format!("{} must be a number", field_name)))?;
+        Ok(Some(number as usize))
+    } else {
+        Ok(None)
+    }
+}
+
+fn warn_about_unsupported_array_features(schema_obj: &Map<String, Value>) {
+    if schema_obj.contains_key("uniqueItems") {
+        eprintln!("Warning: uniqueItems constraint not supported, ignoring");
+    }
+    
+    if schema_obj.contains_key("contains") {
+        eprintln!("Warning: contains keyword not supported, ignoring");
+    }
+    
+    if schema_obj.contains_key("additionalItems") {
+        eprintln!("Warning: additionalItems not supported, ignoring");
     }
 }
 
@@ -536,6 +637,216 @@ mod tests {
             }
             _ => {
                 panic!("Expected empty string enum schema to parse to StringType::Enum");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_object_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "age": {
+                    "type": "integer"
+                }
+            },
+            "required": ["name"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Object { required, optional }) => {
+                // name should be required
+                assert!(required.contains_key("name"));
+                assert!(matches!(required.get("name"), Some(SchemaState::String(_))));
+                
+                // age should be optional
+                assert!(optional.contains_key("age"));
+                assert!(matches!(optional.get("age"), Some(SchemaState::Number(_))));
+            }
+            _ => {
+                panic!("Expected object schema to parse to SchemaState::Object");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_nested_object_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "user": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "integer"
+                        },
+                        "email": {
+                            "type": "string",
+                            "format": "email"
+                        }
+                    },
+                    "required": ["id"]
+                },
+                "active": {
+                    "type": "boolean"
+                }
+            },
+            "required": ["user"]
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Object { required, optional }) => {
+                // user should be required and be an object
+                assert!(required.contains_key("user"));
+                match required.get("user") {
+                    Some(SchemaState::Object { required: user_required, optional: user_optional }) => {
+                        // Check nested object structure
+                        assert!(user_required.contains_key("id"));
+                        assert!(matches!(user_required.get("id"), Some(SchemaState::Number(_))));
+                        
+                        assert!(user_optional.contains_key("email"));
+                        assert!(matches!(user_optional.get("email"), Some(SchemaState::String(_))));
+                    }
+                    _ => panic!("Expected user field to be an object")
+                }
+                
+                // active should be optional
+                assert!(optional.contains_key("active"));
+                assert!(matches!(optional.get("active"), Some(SchemaState::Boolean)));
+            }
+            _ => {
+                panic!("Expected nested object schema to parse to SchemaState::Object");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_array_schema() {
+        let schema = json!({
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 10
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                assert_eq!(min_length, 1);
+                assert_eq!(max_length, 10);
+                assert!(matches!(item_schema.as_ref(), SchemaState::String(_)));
+            }
+            _ => {
+                panic!("Expected array schema to parse to SchemaState::Array");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_array_without_constraints() {
+        let schema = json!({
+            "type": "array",
+            "items": {
+                "type": "integer"
+            }
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                assert_eq!(min_length, 0);
+                assert_eq!(max_length, usize::MAX);
+                assert!(matches!(item_schema.as_ref(), SchemaState::Number(_)));
+            }
+            _ => {
+                panic!("Expected array without constraints to parse with default bounds");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_nested_array_schema() {
+        let schema = json!({
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "format": "email"
+                },
+                "minItems": 2,
+                "maxItems": 5
+            },
+            "minItems": 1,
+            "maxItems": 3
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Array { min_length, max_length, schema: item_schema }) => {
+                assert_eq!(min_length, 1);
+                assert_eq!(max_length, 3);
+                
+                // Check nested array
+                match item_schema.as_ref() {
+                    SchemaState::Array { min_length: inner_min, max_length: inner_max, schema: inner_schema } => {
+                        assert_eq!(*inner_min, 2);
+                        assert_eq!(*inner_max, 5);
+                        assert!(matches!(inner_schema.as_ref(), SchemaState::String(_)));
+                    }
+                    _ => panic!("Expected nested array structure")
+                }
+            }
+            _ => {
+                panic!("Expected nested array schema to parse to SchemaState::Array");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_array_of_objects() {
+        let schema = json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["id"]
+            }
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Array { schema: item_schema, .. }) => {
+                match item_schema.as_ref() {
+                    SchemaState::Object { required, optional } => {
+                        assert!(required.contains_key("id"));
+                        assert!(optional.contains_key("name"));
+                    }
+                    _ => panic!("Expected array items to be objects")
+                }
+            }
+            _ => {
+                panic!("Expected array of objects to parse correctly");
             }
         }
     }
