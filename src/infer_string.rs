@@ -50,7 +50,7 @@ fn dates(s: &str) -> Option<StringType> {
     }
 
     if chrono::DateTime::parse_from_rfc2822(s).is_ok() {
-        return Some(StringType::DateTimeISO8601);
+        return Some(StringType::DateTimeRFC2822);
     }
 
     None

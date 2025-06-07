@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use drivel::SchemaState;
+use drivel::{SchemaState, ToJsonSchema};
 use jemallocator::Jemalloc;
 
 #[global_allocator]
@@ -8,7 +8,11 @@ static GLOBAL: Jemalloc = Jemalloc;
 #[derive(Subcommand, Debug)]
 enum Mode {
     /// Describe the inferred schema for the input data
-    Describe,
+    Describe {
+        /// Output JSON Schema format instead of human-readable description
+        #[arg(long)]
+        json_schema: bool,
+    },
     /// Produce synthetic data adhering to the inferred schema
     Produce {
         #[arg(short, long)]
@@ -110,8 +114,14 @@ fn main() {
             let stdout = std::io::stdout();
             serde_json::to_writer_pretty(stdout, &result).unwrap();
         }
-        Mode::Describe => {
-            println!("{}", schema.to_string_pretty());
+        Mode::Describe { json_schema } => {
+            if *json_schema {
+                let json_schema = schema.to_json_schema_document();
+                let stdout = std::io::stdout();
+                serde_json::to_writer_pretty(stdout, &json_schema).unwrap();
+            } else {
+                println!("{}", schema.to_string_pretty());
+            }
         }
     }
 }

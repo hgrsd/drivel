@@ -518,7 +518,7 @@ mod tests {
         };
         let schema = infer_schema(input, &options);
 
-        assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
+        assert_eq!(schema, SchemaState::String(StringType::DateTimeRFC2822))
     }
 
     #[test]
