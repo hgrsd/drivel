@@ -35,6 +35,8 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
         "string" => parse_string_type(schema_obj),
         "number" => parse_number_type(schema_obj, false),
         "integer" => parse_number_type(schema_obj, true),
+        "boolean" => Ok(SchemaState::Boolean),
+        "null" => Ok(SchemaState::Null),
         _ => Err(ParseSchemaError::UnsupportedFeature(format!("Type '{}' not supported yet", type_str)))
     }
 }
@@ -440,6 +442,42 @@ mod tests {
             }
             _ => {
                 panic!("Expected number with unsupported constraints to parse with warnings");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_boolean_schema() {
+        let schema = json!({
+            "type": "boolean"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Boolean) => {
+                // Expected result
+            }
+            _ => {
+                panic!("Expected boolean schema to parse successfully");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_null_schema() {
+        let schema = json!({
+            "type": "null"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Null) => {
+                // Expected result
+            }
+            _ => {
+                panic!("Expected null schema to parse successfully");
             }
         }
     }
