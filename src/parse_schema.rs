@@ -1,4 +1,4 @@
-use crate::schema::{SchemaState, StringType};
+use crate::schema::{SchemaState, StringType, NumberType};
 use serde_json::{Map, Value};
 use std::fmt;
 
@@ -33,6 +33,8 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
     
     match type_str {
         "string" => parse_string_type(schema_obj),
+        "number" => parse_number_type(schema_obj, false),
+        "integer" => parse_number_type(schema_obj, true),
         _ => Err(ParseSchemaError::UnsupportedFeature(format!("Type '{}' not supported yet", type_str)))
     }
 }
@@ -92,6 +94,51 @@ fn create_unknown_string_type(min_length: Option<usize>, max_length: Option<usiz
         chars_seen: vec![],
         min_length,
         max_length,
+    }
+}
+
+fn parse_number_type(schema_obj: &Map<String, Value>, is_integer: bool) -> Result<SchemaState, ParseSchemaError> {
+    let (min_value, max_value) = parse_number_constraints(schema_obj)?;
+    warn_about_unsupported_number_features(schema_obj);
+    
+    if is_integer {
+        let min = min_value.map(|v| v as i64).unwrap_or(i64::MIN);
+        let max = max_value.map(|v| v as i64).unwrap_or(i64::MAX);
+        Ok(SchemaState::Number(NumberType::Integer { min, max }))
+    } else {
+        let min = min_value.unwrap_or(f64::NEG_INFINITY);
+        let max = max_value.unwrap_or(f64::INFINITY);
+        Ok(SchemaState::Number(NumberType::Float { min, max }))
+    }
+}
+
+fn parse_number_constraints(schema_obj: &Map<String, Value>) -> Result<(Option<f64>, Option<f64>), ParseSchemaError> {
+    let min_value = parse_numeric_field(schema_obj, "minimum")?;
+    let max_value = parse_numeric_field(schema_obj, "maximum")?;
+    Ok((min_value, max_value))
+}
+
+fn parse_numeric_field(schema_obj: &Map<String, Value>, field_name: &str) -> Result<Option<f64>, ParseSchemaError> {
+    if let Some(value) = schema_obj.get(field_name) {
+        let number = value.as_f64()
+            .ok_or_else(|| ParseSchemaError::InvalidSchema(format!("{} must be a number", field_name)))?;
+        Ok(Some(number))
+    } else {
+        Ok(None)
+    }
+}
+
+fn warn_about_unsupported_number_features(schema_obj: &Map<String, Value>) {
+    if schema_obj.contains_key("exclusiveMinimum") {
+        eprintln!("Warning: exclusiveMinimum not supported, treating as inclusive minimum");
+    }
+    
+    if schema_obj.contains_key("exclusiveMaximum") {
+        eprintln!("Warning: exclusiveMaximum not supported, treating as inclusive maximum");
+    }
+    
+    if schema_obj.contains_key("multipleOf") {
+        eprintln!("Warning: multipleOf constraint not supported, ignoring");
     }
 }
 
@@ -255,6 +302,144 @@ mod tests {
             }
             _ => {
                 panic!("Expected string with max length to parse correctly");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_number_schema() {
+        let schema = json!({
+            "type": "number"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(_)) => {
+                // Expected result
+            }
+            _ => {
+                panic!("Expected number schema to parse successfully");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_basic_integer_schema() {
+        let schema = json!({
+            "type": "integer"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(_)) => {
+                // Expected result  
+            }
+            _ => {
+                panic!("Expected integer schema to parse successfully");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_number_with_constraints() {
+        let schema = json!({
+            "type": "number",
+            "minimum": 1.5,
+            "maximum": 99.9
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
+                assert_eq!(min, 1.5);
+                assert_eq!(max, 99.9);
+            }
+            _ => {
+                panic!("Expected number with constraints to parse correctly");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_integer_with_constraints() {
+        let schema = json!({
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(crate::schema::NumberType::Integer { min, max })) => {
+                assert_eq!(min, 0);
+                assert_eq!(max, 100);
+            }
+            _ => {
+                panic!("Expected integer with constraints to parse correctly");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_number_without_constraints() {
+        let schema = json!({
+            "type": "number"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
+                assert_eq!(min, f64::NEG_INFINITY);
+                assert_eq!(max, f64::INFINITY);
+            }
+            _ => {
+                panic!("Expected number without constraints to use infinite bounds");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_integer_without_constraints() {
+        let schema = json!({
+            "type": "integer"
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(crate::schema::NumberType::Integer { min, max })) => {
+                assert_eq!(min, i64::MIN);
+                assert_eq!(max, i64::MAX);
+            }
+            _ => {
+                panic!("Expected integer without constraints to use min/max bounds");
+            }
+        }
+    }
+
+    #[test]
+    fn parse_number_with_unsupported_constraints() {
+        let schema = json!({
+            "type": "number",
+            "minimum": 5.0,
+            "exclusiveMaximum": 10.0,
+            "multipleOf": 2.5
+        });
+        
+        let result = parse_json_schema(&schema);
+        
+        match result {
+            Ok(SchemaState::Number(crate::schema::NumberType::Float { min, max })) => {
+                assert_eq!(min, 5.0);
+                assert_eq!(max, f64::INFINITY);
+            }
+            _ => {
+                panic!("Expected number with unsupported constraints to parse with warnings");
             }
         }
     }
