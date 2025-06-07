@@ -418,7 +418,8 @@ fn parse_array_constraints(
     schema_obj: &Map<String, Value>,
 ) -> Result<(usize, usize), ParseSchemaError> {
     let min_items = parse_optional_usize_field(schema_obj, "minItems")?.unwrap_or(0);
-    let max_items = parse_optional_usize_field(schema_obj, "maxItems")?.unwrap_or(usize::MAX);
+    let max_items =
+        parse_optional_usize_field(schema_obj, "maxItems")?.unwrap_or(/* sane default */ 16);
     Ok((min_items, max_items))
 }
 
