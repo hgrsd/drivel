@@ -27,6 +27,10 @@ struct Args {
     #[command(subcommand)]
     mode: Mode,
 
+    /// Treat input as JSON Schema instead of example data
+    #[arg(long, global = true)]
+    from_schema: bool,
+
     /// Infer that some string fields are enums based on the number of unique values seen.
     #[arg(long, global = true)]
     infer_enum: bool,
@@ -65,28 +69,48 @@ fn main() {
         }
     };
 
-    let opts = drivel::InferenceOptions {
-        enum_inference: (&args).into(),
-    };
-
-    let schema = if let Ok(json) = serde_json::from_str(&input) {
-        drivel::infer_schema(json, &opts)
+    let schema = if args.from_schema {
+        // Parse input as JSON Schema
+        let json = match serde_json::from_str(&input) {
+            Ok(json) => json,
+            Err(err) => {
+                eprintln!("Error parsing input as JSON Schema: {}", err);
+                std::process::exit(1);
+            }
+        };
+        
+        match drivel::parse_json_schema(&json) {
+            Ok(schema) => schema,
+            Err(err) => {
+                eprintln!("Error parsing JSON Schema: {}", err);
+                std::process::exit(1);
+            }
+        }
     } else {
-        // unable to parse input as JSON; try JSON lines format as fallback
-        let values = input
-            .lines()
-            .map(|line| match serde_json::from_str(line) {
-                Ok(v) => v,
-                Err(err) => {
-                    eprintln!(
-                        "Error parsing input; are you sure it is valid JSON? Error: {}",
-                        err
-                    );
-                    std::process::exit(1);
-                }
-            })
-            .collect();
-        drivel::infer_schema_from_iter(values, &opts)
+        // Existing inference workflow
+        let opts = drivel::InferenceOptions {
+            enum_inference: (&args).into(),
+        };
+
+        if let Ok(json) = serde_json::from_str(&input) {
+            drivel::infer_schema(json, &opts)
+        } else {
+            // unable to parse input as JSON; try JSON lines format as fallback
+            let values = input
+                .lines()
+                .map(|line| match serde_json::from_str(line) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        eprintln!(
+                            "Error parsing input; are you sure it is valid JSON? Error: {}",
+                            err
+                        );
+                        std::process::exit(1);
+                    }
+                })
+                .collect();
+            drivel::infer_schema_from_iter(values, &opts)
+        }
     };
 
     match &args.mode {

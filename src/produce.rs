@@ -128,8 +128,9 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                 return serde_json::Value::Array(vec![]);
             }
 
-            let n_elements = if current_depth == 0 {
-                // if we are dealing with an array at the root, we produce the requested `n` elements
+            let n_elements = if current_depth == 0 && repeat_n > 1 {
+                // if we are dealing with an array at the root and user requested multiple repetitions,
+                // we produce the requested `n` elements
                 repeat_n
             } else if min_length != max_length {
                 thread_rng().gen_range(*min_length..=*max_length)
