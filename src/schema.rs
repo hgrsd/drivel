@@ -416,8 +416,13 @@ mod tests {
         }
 
         pub fn enum_string(variants: Vec<&str>) -> StringType {
-            let variant_set = variants.iter().map(|s| s.to_string()).collect::<HashSet<_>>();
-            StringType::Enum { variants: variant_set }
+            let variant_set = variants
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<HashSet<_>>();
+            StringType::Enum {
+                variants: variant_set,
+            }
         }
 
         pub fn integer_range(min: i64, max: i64) -> NumberType {
@@ -440,7 +445,11 @@ mod tests {
             SchemaState::Nullable(Box::new(inner))
         }
 
-        pub fn array_schema(min_length: usize, max_length: usize, item_schema: SchemaState) -> SchemaState {
+        pub fn array_schema(
+            min_length: usize,
+            max_length: usize,
+            item_schema: SchemaState,
+        ) -> SchemaState {
             SchemaState::Array {
                 min_length,
                 max_length,
@@ -456,7 +465,7 @@ mod tests {
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v))
                 .collect::<HashMap<_, _>>();
-            
+
             let optional = optional_fields
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v))
@@ -471,8 +480,8 @@ mod tests {
     }
 
     mod json_schema_tests {
-        use super::*;
         use super::test_helpers::*;
+        use super::*;
 
         mod basic_types {
             use super::*;
@@ -504,11 +513,14 @@ mod tests {
             #[test]
             fn unknown_string_with_length_constraints_to_json_schema() {
                 let schema = string_schema(unknown_string(Some(3), Some(10)));
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 10
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 10
+                    }),
+                );
             }
 
             #[test]
@@ -520,84 +532,111 @@ mod tests {
             #[test]
             fn unknown_string_min_only_to_json_schema() {
                 let schema = string_schema(unknown_string(Some(5), None));
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "minLength": 5
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "minLength": 5
+                    }),
+                );
             }
 
             #[test]
             fn unknown_string_max_only_to_json_schema() {
                 let schema = string_schema(unknown_string(None, Some(20)));
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "maxLength": 20
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "maxLength": 20
+                    }),
+                );
             }
 
             #[test]
             fn uuid_string_to_json_schema() {
                 let schema = string_schema(StringType::UUID);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "uuid"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "uuid"
+                    }),
+                );
             }
 
             #[test]
             fn email_string_to_json_schema() {
                 let schema = string_schema(StringType::Email);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "email"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "email"
+                    }),
+                );
             }
 
             #[test]
             fn url_string_to_json_schema() {
                 let schema = string_schema(StringType::Url);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "uri"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "uri"
+                    }),
+                );
             }
 
             #[test]
             fn iso_date_string_to_json_schema() {
                 let schema = string_schema(StringType::IsoDate);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "date"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "date"
+                    }),
+                );
             }
 
             #[test]
             fn datetime_iso8601_string_to_json_schema() {
                 let schema = string_schema(StringType::DateTimeISO8601);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "date-time"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "date-time"
+                    }),
+                );
             }
 
             #[test]
             fn hostname_string_to_json_schema() {
                 let schema = string_schema(StringType::Hostname);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "format": "hostname",
-                    "x-drivel-type": "hostname"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "format": "hostname",
+                        "x-drivel-type": "hostname"
+                    }),
+                );
             }
 
             #[test]
             fn datetime_rfc2822_string_to_json_schema() {
                 let schema = string_schema(StringType::DateTimeRFC2822);
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "x-drivel-type": "datetime-rfc2822",
-                    "description": "RFC 2822 datetime format"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "x-drivel-type": "datetime-rfc2822",
+                        "description": "RFC 2822 datetime format"
+                    }),
+                );
             }
 
             #[test]
@@ -613,19 +652,25 @@ mod tests {
             #[test]
             fn enum_string_single_variant_to_json_schema() {
                 let schema = string_schema(enum_string(vec!["only"]));
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "enum": ["only"]
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "enum": ["only"]
+                    }),
+                );
             }
 
             #[test]
             fn enum_string_empty_variants_to_json_schema() {
                 let schema = string_schema(enum_string(vec![]));
-                assert_schema_equals(&schema, json!({
-                    "type": "string",
-                    "enum": []
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "string",
+                        "enum": []
+                    }),
+                );
             }
         }
 
@@ -635,71 +680,92 @@ mod tests {
             #[test]
             fn integer_range_to_json_schema() {
                 let schema = number_schema(integer_range(1, 100));
-                assert_schema_equals(&schema, json!({
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 100
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                    }),
+                );
             }
 
             #[test]
             fn integer_single_value_to_json_schema() {
                 let schema = number_schema(integer_range(42, 42));
-                assert_schema_equals(&schema, json!({
-                    "type": "integer",
-                    "minimum": 42,
-                    "maximum": 42
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "integer",
+                        "minimum": 42,
+                        "maximum": 42
+                    }),
+                );
             }
 
             #[test]
             fn integer_negative_range_to_json_schema() {
                 let schema = number_schema(integer_range(-100, -10));
-                assert_schema_equals(&schema, json!({
-                    "type": "integer",
-                    "minimum": -100,
-                    "maximum": -10
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "integer",
+                        "minimum": -100,
+                        "maximum": -10
+                    }),
+                );
             }
 
             #[test]
             fn integer_zero_range_to_json_schema() {
                 let schema = number_schema(integer_range(0, 0));
-                assert_schema_equals(&schema, json!({
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 0
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 0
+                    }),
+                );
             }
 
             #[test]
             fn float_range_to_json_schema() {
                 let schema = number_schema(float_range(1.5, 99.9));
-                assert_schema_equals(&schema, json!({
-                    "type": "number",
-                    "minimum": 1.5,
-                    "maximum": 99.9
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "number",
+                        "minimum": 1.5,
+                        "maximum": 99.9
+                    }),
+                );
             }
 
             #[test]
             fn float_single_value_to_json_schema() {
                 let schema = number_schema(float_range(3.14, 3.14));
-                assert_schema_equals(&schema, json!({
-                    "type": "number",
-                    "minimum": 3.14,
-                    "maximum": 3.14
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "number",
+                        "minimum": 3.14,
+                        "maximum": 3.14
+                    }),
+                );
             }
 
             #[test]
             fn float_negative_range_to_json_schema() {
                 let schema = number_schema(float_range(-99.9, -1.1));
-                assert_schema_equals(&schema, json!({
-                    "type": "number",
-                    "minimum": -99.9,
-                    "maximum": -1.1
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "number",
+                        "minimum": -99.9,
+                        "maximum": -1.1
+                    }),
+                );
             }
         }
 
@@ -709,41 +775,50 @@ mod tests {
             #[test]
             fn nullable_string_to_json_schema() {
                 let schema = nullable_schema(string_schema(StringType::UUID));
-                assert_schema_equals(&schema, json!({
-                    "type": ["string", "null"],
-                    "format": "uuid"
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                    }),
+                );
             }
 
             #[test]
             fn nullable_integer_to_json_schema() {
                 let schema = nullable_schema(number_schema(integer_range(1, 10)));
-                assert_schema_equals(&schema, json!({
-                    "type": ["integer", "null"],
-                    "minimum": 1,
-                    "maximum": 10
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                        "maximum": 10
+                    }),
+                );
             }
 
             #[test]
             fn nullable_array_to_json_schema() {
                 let schema = nullable_schema(array_schema(1, 3, string_schema(StringType::Email)));
-                assert_schema_equals(&schema, json!({
-                    "type": ["array", "null"],
-                    "items": {
-                        "type": "string",
-                        "format": "email"
-                    },
-                    "minItems": 1,
-                    "maxItems": 3
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": ["array", "null"],
+                        "items": {
+                            "type": "string",
+                            "format": "email"
+                        },
+                        "minItems": 1,
+                        "maxItems": 3
+                    }),
+                );
             }
 
             #[test]
             fn nullable_object_to_json_schema() {
                 let schema = nullable_schema(object_schema(
                     vec![("id", number_schema(integer_range(1, 100)))],
-                    vec![]
+                    vec![],
                 ));
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], json!(["object", "null"]));
@@ -759,34 +834,44 @@ mod tests {
             #[test]
             fn array_with_constraints_to_json_schema() {
                 let schema = array_schema(1, 5, string_schema(StringType::UUID));
-                assert_schema_equals(&schema, json!({
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "minItems": 1,
-                    "maxItems": 5
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                    }),
+                );
             }
 
             #[test]
             fn empty_array_to_json_schema() {
                 let schema = array_schema(0, 0, SchemaState::Boolean);
-                assert_schema_equals(&schema, json!({
-                    "type": "array",
-                    "items": { "type": "boolean" },
-                    "minItems": 0,
-                    "maxItems": 0
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "array",
+                        "items": { "type": "boolean" },
+                        "minItems": 0,
+                        "maxItems": 0
+                    }),
+                );
             }
 
             #[test]
             fn array_of_objects_to_json_schema() {
-                let schema = array_schema(1, 10, object_schema(
-                    vec![("name", string_schema(unknown_string(Some(1), Some(50))))],
-                    vec![]
-                ));
+                let schema = array_schema(
+                    1,
+                    10,
+                    object_schema(
+                        vec![("name", string_schema(unknown_string(Some(1), Some(50))))],
+                        vec![],
+                    ),
+                );
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "array");
                 assert_eq!(result["minItems"], 1);
@@ -797,7 +882,11 @@ mod tests {
 
             #[test]
             fn nested_array_to_json_schema() {
-                let schema = array_schema(1, 3, array_schema(2, 4, number_schema(integer_range(1, 100))));
+                let schema = array_schema(
+                    1,
+                    3,
+                    array_schema(2, 4, number_schema(integer_range(1, 100))),
+                );
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "array");
                 assert_eq!(result["items"]["type"], "array");
@@ -816,7 +905,7 @@ mod tests {
             fn object_with_required_and_optional_to_json_schema() {
                 let schema = object_schema(
                     vec![("id", number_schema(integer_range(1, 1000)))],
-                    vec![("name", string_schema(unknown_string(Some(1), Some(50))))]
+                    vec![("name", string_schema(unknown_string(Some(1), Some(50))))],
                 );
                 let result = schema.to_json_schema();
 
@@ -830,12 +919,15 @@ mod tests {
             #[test]
             fn empty_object_to_json_schema() {
                 let schema = object_schema(vec![], vec![]);
-                assert_schema_equals(&schema, json!({
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [],
-                    "properties": {}
-                }));
+                assert_schema_equals(
+                    &schema,
+                    json!({
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [],
+                        "properties": {}
+                    }),
+                );
             }
 
             #[test]
@@ -843,15 +935,21 @@ mod tests {
                 let schema = object_schema(
                     vec![
                         ("id", number_schema(integer_range(1, 100))),
-                        ("status", SchemaState::Boolean)
+                        ("status", SchemaState::Boolean),
                     ],
-                    vec![]
+                    vec![],
                 );
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "object");
                 assert_eq!(result["required"].as_array().unwrap().len(), 2);
-                assert!(result["required"].as_array().unwrap().contains(&json!("id")));
-                assert!(result["required"].as_array().unwrap().contains(&json!("status")));
+                assert!(result["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("id")));
+                assert!(result["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("status")));
             }
 
             #[test]
@@ -860,8 +958,8 @@ mod tests {
                     vec![],
                     vec![
                         ("description", string_schema(unknown_string(None, None))),
-                        ("count", number_schema(integer_range(0, 10)))
-                    ]
+                        ("count", number_schema(integer_range(0, 10))),
+                    ],
                 );
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "object");
@@ -874,12 +972,9 @@ mod tests {
             fn nested_object_to_json_schema() {
                 let inner_object = object_schema(
                     vec![("nested_id", number_schema(integer_range(1, 10)))],
-                    vec![]
+                    vec![],
                 );
-                let schema = object_schema(
-                    vec![("inner", inner_object)],
-                    vec![]
-                );
+                let schema = object_schema(vec![("inner", inner_object)], vec![]);
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "object");
                 assert_eq!(result["properties"]["inner"]["type"], "object");
