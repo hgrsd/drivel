@@ -30,18 +30,14 @@ use std::fmt::Display;
 ///
 /// let json_schema = string_schema.to_json_schema();
 /// assert_eq!(json_schema, json!({
-///     "type": "string",
-///     "minLength": 3,
-///     "maxLength": 50
+///     "type": "string"
 /// }));
 ///
 /// // Number schema with range constraints
 /// let number_schema = SchemaState::Number(NumberType::Integer { min: 1, max: 100 });
 /// let json_schema = number_schema.to_json_schema();
 /// assert_eq!(json_schema, json!({
-///     "type": "integer",
-///     "minimum": 1,
-///     "maximum": 100
+///     "type": "integer"
 /// }));
 /// ```
 ///
@@ -408,17 +404,13 @@ impl Display for StringType {
 /// // Integer with range constraints
 /// let int_type = NumberType::Integer { min: 1, max: 100 };
 /// assert_eq!(int_type.to_json_schema(), json!({
-///     "type": "integer",
-///     "minimum": 1,
-///     "maximum": 100
+///     "type": "integer"
 /// }));
 ///
 /// // Float with range constraints
 /// let float_type = NumberType::Float { min: 0.5, max: 99.9 };
 /// assert_eq!(float_type.to_json_schema(), json!({
-///     "type": "number",
-///     "minimum": 0.5,
-///     "maximum": 99.9
+///     "type": "number"
 /// }));
 /// ```
 #[derive(PartialEq, Debug)]
@@ -674,16 +666,10 @@ impl ToJsonSchema for SchemaState {
 
                 inner_schema
             }
-            SchemaState::Array {
-                min_length,
-                max_length,
-                schema,
-            } => {
+            SchemaState::Array { schema, .. } => {
                 serde_json::json!({
                     "type": "array",
-                    "items": schema.to_json_schema(),
-                    "minItems": min_length,
-                    "maxItems": max_length
+                    "items": schema.to_json_schema()
                 })
             }
             SchemaState::Object { required, optional } => {
@@ -715,19 +701,8 @@ impl ToJsonSchema for SchemaState {
 impl ToJsonSchema for StringType {
     fn to_json_schema(&self) -> serde_json::Value {
         match self {
-            StringType::Unknown {
-                min_length,
-                max_length,
-                ..
-            } => {
-                let mut schema = serde_json::json!({ "type": "string" });
-                if let Some(min) = min_length {
-                    schema["minLength"] = serde_json::Value::Number((*min).into());
-                }
-                if let Some(max) = max_length {
-                    schema["maxLength"] = serde_json::Value::Number((*max).into());
-                }
-                schema
+            StringType::Unknown { .. } => {
+                serde_json::json!({ "type": "string" })
             }
             StringType::UUID => serde_json::json!({
                 "type": "string",
@@ -773,15 +748,11 @@ impl ToJsonSchema for StringType {
 impl ToJsonSchema for NumberType {
     fn to_json_schema(&self) -> serde_json::Value {
         match self {
-            NumberType::Integer { min, max } => serde_json::json!({
-                "type": "integer",
-                "minimum": min,
-                "maximum": max
+            NumberType::Integer { .. } => serde_json::json!({
+                "type": "integer"
             }),
-            NumberType::Float { min, max } => serde_json::json!({
-                "type": "number",
-                "minimum": min,
-                "maximum": max
+            NumberType::Float { .. } => serde_json::json!({
+                "type": "number"
             }),
         }
     }
@@ -906,9 +877,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "string",
-                        "minLength": 3,
-                        "maxLength": 10
+                        "type": "string"
                     }),
                 );
             }
@@ -925,8 +894,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "string",
-                        "minLength": 5
+                        "type": "string"
                     }),
                 );
             }
@@ -937,8 +905,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "string",
-                        "maxLength": 20
+                        "type": "string"
                     }),
                 );
             }
@@ -1073,9 +1040,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 100
+                        "type": "integer"
                     }),
                 );
             }
@@ -1086,9 +1051,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "integer",
-                        "minimum": 42,
-                        "maximum": 42
+                        "type": "integer"
                     }),
                 );
             }
@@ -1099,9 +1062,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "integer",
-                        "minimum": -100,
-                        "maximum": -10
+                        "type": "integer"
                     }),
                 );
             }
@@ -1112,9 +1073,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 0
+                        "type": "integer"
                     }),
                 );
             }
@@ -1125,9 +1084,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "number",
-                        "minimum": 1.5,
-                        "maximum": 99.9
+                        "type": "number"
                     }),
                 );
             }
@@ -1138,9 +1095,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "number",
-                        "minimum": 3.14,
-                        "maximum": 3.14
+                        "type": "number"
                     }),
                 );
             }
@@ -1151,9 +1106,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": "number",
-                        "minimum": -99.9,
-                        "maximum": -1.1
+                        "type": "number"
                     }),
                 );
             }
@@ -1180,9 +1133,7 @@ mod tests {
                 assert_schema_equals(
                     &schema,
                     json!({
-                        "type": ["integer", "null"],
-                        "minimum": 1,
-                        "maximum": 10
+                        "type": ["integer", "null"]
                     }),
                 );
             }
@@ -1197,9 +1148,7 @@ mod tests {
                         "items": {
                             "type": "string",
                             "format": "email"
-                        },
-                        "minItems": 1,
-                        "maxItems": 3
+                        }
                     }),
                 );
             }
@@ -1231,9 +1180,7 @@ mod tests {
                         "items": {
                             "type": "string",
                             "format": "uuid"
-                        },
-                        "minItems": 1,
-                        "maxItems": 5
+                        }
                     }),
                 );
             }
@@ -1245,9 +1192,7 @@ mod tests {
                     &schema,
                     json!({
                         "type": "array",
-                        "items": { "type": "boolean" },
-                        "minItems": 0,
-                        "maxItems": 0
+                        "items": { "type": "boolean" }
                     }),
                 );
             }
@@ -1264,8 +1209,6 @@ mod tests {
                 );
                 let result = schema.to_json_schema();
                 assert_eq!(result["type"], "array");
-                assert_eq!(result["minItems"], 1);
-                assert_eq!(result["maxItems"], 10);
                 assert_eq!(result["items"]["type"], "object");
                 assert_eq!(result["items"]["properties"]["name"]["type"], "string");
             }
@@ -1281,10 +1224,6 @@ mod tests {
                 assert_eq!(result["type"], "array");
                 assert_eq!(result["items"]["type"], "array");
                 assert_eq!(result["items"]["items"]["type"], "integer");
-                assert_eq!(result["minItems"], 1);
-                assert_eq!(result["maxItems"], 3);
-                assert_eq!(result["items"]["minItems"], 2);
-                assert_eq!(result["items"]["maxItems"], 4);
             }
         }
 
@@ -1397,6 +1336,71 @@ mod tests {
                     "Schema inferred by drivel from sample data"
                 );
                 assert_eq!(document["type"], "boolean");
+            }
+        }
+
+        // Phase 8 tests: Verify constraints are NOT included in JSON schema output
+        mod phase8_simplifications {
+            use super::*;
+
+            #[test]
+            fn integer_no_constraints_in_json_schema() {
+                let schema = number_schema(integer_range(1, 100));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], "integer");
+                assert!(result.get("minimum").is_none());
+                assert!(result.get("maximum").is_none());
+            }
+
+            #[test]
+            fn float_no_constraints_in_json_schema() {
+                let schema = number_schema(float_range(1.5, 99.9));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], "number");
+                assert!(result.get("minimum").is_none());
+                assert!(result.get("maximum").is_none());
+            }
+
+            #[test]
+            fn string_no_length_constraints_in_json_schema() {
+                let schema = string_schema(unknown_string(Some(3), Some(50)));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], "string");
+                assert!(result.get("minLength").is_none());
+                assert!(result.get("maxLength").is_none());
+            }
+
+            #[test]
+            fn array_no_items_constraints_in_json_schema() {
+                let schema = array_schema(1, 5, string_schema(StringType::UUID));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], "array");
+                assert_eq!(result["items"]["type"], "string");
+                assert_eq!(result["items"]["format"], "uuid");
+                assert!(result.get("minItems").is_none());
+                assert!(result.get("maxItems").is_none());
+            }
+
+            #[test]
+            fn nullable_integer_no_constraints_in_json_schema() {
+                let schema = nullable_schema(number_schema(integer_range(1, 10)));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], json!(["integer", "null"]));
+                assert!(result.get("minimum").is_none());
+                assert!(result.get("maximum").is_none());
+            }
+
+            #[test]
+            fn enum_still_works_in_json_schema() {
+                let schema = string_schema(enum_string(vec!["red", "green", "blue"]));
+                let result = schema.to_json_schema();
+                assert_eq!(result["type"], "string");
+                assert!(result["enum"].is_array());
+                let enum_values = result["enum"].as_array().unwrap();
+                assert_eq!(enum_values.len(), 3);
+                assert!(enum_values.contains(&json!("red")));
+                assert!(enum_values.contains(&json!("green")));
+                assert!(enum_values.contains(&json!("blue")));
             }
         }
     }

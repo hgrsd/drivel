@@ -28,7 +28,6 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
         .as_object()
         .ok_or_else(|| ParseSchemaError::InvalidSchema("Schema must be an object".to_string()))?;
 
-    // Check for anyOf/oneOf nullable patterns first
     if let Some(any_of) = schema_obj.get("anyOf") {
         if let Some(nullable_schema) = try_parse_nullable_anyof_oneof(any_of)? {
             return Ok(nullable_schema);
@@ -47,7 +46,6 @@ pub fn parse_json_schema(schema_json: &Value) -> Result<SchemaState, ParseSchema
         ));
     }
 
-    // Handle type field patterns
     let type_field = schema_obj.get("type").ok_or_else(|| {
         ParseSchemaError::InvalidSchema(
             "Schema must have a 'type' field, 'anyOf', or 'oneOf'".to_string(),
@@ -201,7 +199,9 @@ fn validate_min_max_constraint<T: PartialOrd>(
 ) -> Result<(), ParseSchemaError> {
     if let (Some(min_val), Some(max_val)) = (min.as_ref(), max.as_ref()) {
         if min_val > max_val {
-            return Err(ParseSchemaError::ValidationFailed(error_message.to_string()));
+            return Err(ParseSchemaError::ValidationFailed(
+                error_message.to_string(),
+            ));
         }
     }
     Ok(())
@@ -212,13 +212,13 @@ fn parse_string_length_constraints(
 ) -> Result<(Option<usize>, Option<usize>), ParseSchemaError> {
     let min_length = parse_optional_usize_field(schema_obj, "minLength")?;
     let max_length = parse_optional_usize_field(schema_obj, "maxLength")?;
-    
+
     validate_min_max_constraint(
         min_length,
         max_length,
         "minLength cannot be greater than maxLength",
     )?;
-    
+
     Ok((min_length, max_length))
 }
 
@@ -298,7 +298,7 @@ fn parse_number_type(
     } else {
         let min = min_value.unwrap_or(f64::NEG_INFINITY);
         let max = max_value.unwrap_or(f64::INFINITY);
-        
+
         // Validate that finite ranges don't cause overflow in random generation
         if min.is_finite() && max.is_finite() {
             let range_size = max - min;
@@ -308,7 +308,7 @@ fn parse_number_type(
                 ));
             }
         }
-        
+
         Ok(SchemaState::Number(NumberType::Float { min, max }))
     }
 }
@@ -318,7 +318,7 @@ fn parse_number_constraints(
 ) -> Result<(Option<f64>, Option<f64>), ParseSchemaError> {
     let mut min_value = parse_numeric_field(schema_obj, "minimum")?;
     let mut max_value = parse_numeric_field(schema_obj, "maximum")?;
-    
+
     // Handle exclusive bounds by treating them as inclusive bounds (with warning)
     if let Some(exclusive_min) = parse_numeric_field(schema_obj, "exclusiveMinimum")? {
         if min_value.is_some() {
@@ -329,7 +329,7 @@ fn parse_number_constraints(
         // Treat exclusive minimum as inclusive minimum (as indicated by warning)
         min_value = Some(exclusive_min);
     }
-    
+
     if let Some(exclusive_max) = parse_numeric_field(schema_obj, "exclusiveMaximum")? {
         if max_value.is_some() {
             return Err(ParseSchemaError::InvalidSchema(
@@ -339,13 +339,13 @@ fn parse_number_constraints(
         // Treat exclusive maximum as inclusive maximum (as indicated by warning)
         max_value = Some(exclusive_max);
     }
-    
+
     validate_min_max_constraint(
         min_value,
         max_value,
         "minimum cannot be greater than maximum",
     )?;
-    
+
     Ok((min_value, max_value))
 }
 
@@ -771,7 +771,8 @@ mod tests {
 
         #[test]
         fn parse_number_with_exclusive_bounds() {
-            let schema = json!({"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 100.0});
+            let schema =
+                json!({"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 100.0});
             let result = parse_json_schema(&schema);
             assert_float_constraints(result, 0.0, 100.0);
         }
@@ -789,7 +790,9 @@ mod tests {
             let result = parse_json_schema(&schema);
             assert!(result.is_err());
             if let Err(err) = result {
-                assert!(err.to_string().contains("Cannot specify both minimum and exclusiveMinimum"));
+                assert!(err
+                    .to_string()
+                    .contains("Cannot specify both minimum and exclusiveMinimum"));
             }
         }
 
@@ -799,7 +802,9 @@ mod tests {
             let result = parse_json_schema(&schema);
             assert!(result.is_err());
             if let Err(err) = result {
-                assert!(err.to_string().contains("Cannot specify both maximum and exclusiveMaximum"));
+                assert!(err
+                    .to_string()
+                    .contains("Cannot specify both maximum and exclusiveMaximum"));
             }
         }
 
@@ -1221,7 +1226,9 @@ mod tests {
             let result = parse_json_schema(&schema);
             assert!(result.is_err());
             if let Err(err) = result {
-                assert!(err.to_string().contains("minLength cannot be greater than maxLength"));
+                assert!(err
+                    .to_string()
+                    .contains("minLength cannot be greater than maxLength"));
             }
         }
 
@@ -1231,7 +1238,9 @@ mod tests {
             let result = parse_json_schema(&schema);
             assert!(result.is_err());
             if let Err(err) = result {
-                assert!(err.to_string().contains("minimum cannot be greater than maximum"));
+                assert!(err
+                    .to_string()
+                    .contains("minimum cannot be greater than maximum"));
             }
         }
 
@@ -1241,7 +1250,9 @@ mod tests {
             let result = parse_json_schema(&schema);
             assert!(result.is_err());
             if let Err(err) = result {
-                assert!(err.to_string().contains("minimum cannot be greater than maximum"));
+                assert!(err
+                    .to_string()
+                    .contains("minimum cannot be greater than maximum"));
             }
         }
 
