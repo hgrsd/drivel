@@ -194,11 +194,31 @@ fn parse_string_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, Par
     }
 }
 
+fn validate_min_max_constraint<T: PartialOrd>(
+    min: Option<T>,
+    max: Option<T>,
+    error_message: &str,
+) -> Result<(), ParseSchemaError> {
+    if let (Some(min_val), Some(max_val)) = (min.as_ref(), max.as_ref()) {
+        if min_val > max_val {
+            return Err(ParseSchemaError::ValidationFailed(error_message.to_string()));
+        }
+    }
+    Ok(())
+}
+
 fn parse_string_length_constraints(
     schema_obj: &Map<String, Value>,
 ) -> Result<(Option<usize>, Option<usize>), ParseSchemaError> {
     let min_length = parse_optional_usize_field(schema_obj, "minLength")?;
     let max_length = parse_optional_usize_field(schema_obj, "maxLength")?;
+    
+    validate_min_max_constraint(
+        min_length,
+        max_length,
+        "minLength cannot be greater than maxLength",
+    )?;
+    
     Ok((min_length, max_length))
 }
 
@@ -245,6 +265,13 @@ fn parse_string_enum(enum_value: &Value) -> Result<SchemaState, ParseSchemaError
         ParseSchemaError::InvalidSchema("Enum field must be an array".to_string())
     })?;
 
+    // Validate that enum array is not empty
+    if enum_array.is_empty() {
+        return Err(ParseSchemaError::ValidationFailed(
+            "enum array cannot be empty".to_string(),
+        ));
+    }
+
     let mut variants = std::collections::HashSet::new();
 
     for item in enum_array {
@@ -280,6 +307,13 @@ fn parse_number_constraints(
 ) -> Result<(Option<f64>, Option<f64>), ParseSchemaError> {
     let min_value = parse_numeric_field(schema_obj, "minimum")?;
     let max_value = parse_numeric_field(schema_obj, "maximum")?;
+    
+    validate_min_max_constraint(
+        min_value,
+        max_value,
+        "minimum cannot be greater than maximum",
+    )?;
+    
     Ok((min_value, max_value))
 }
 
@@ -630,11 +664,9 @@ mod tests {
         fn parse_empty_enum() {
             let schema = json!({"type": "string", "enum": []});
             let result = parse_json_schema(&schema);
-            match result {
-                Ok(SchemaState::String(StringType::Enum { variants })) => {
-                    assert_eq!(variants.len(), 0);
-                }
-                _ => panic!("Expected empty string enum schema to parse to StringType::Enum"),
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("enum array cannot be empty"));
             }
         }
     }
@@ -818,7 +850,7 @@ mod tests {
                     schema: item_schema,
                 }) => {
                     assert_eq!(min_length, 0);
-                    assert_eq!(max_length, usize::MAX);
+                    assert_eq!(max_length, 16);
                     assert!(matches!(item_schema.as_ref(), SchemaState::Number(_)));
                 }
                 _ => panic!("Expected array without constraints to parse with default bounds"),
@@ -1068,6 +1100,46 @@ mod tests {
             assert!(result.is_err());
             if let Err(err) = result {
                 assert!(err.to_string().contains("required must be an array"));
+            }
+        }
+
+        #[test]
+        fn string_with_invalid_length_constraints() {
+            let schema = json!({"type": "string", "minLength": 10, "maxLength": 5});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("minLength cannot be greater than maxLength"));
+            }
+        }
+
+        #[test]
+        fn integer_with_invalid_range_constraints() {
+            let schema = json!({"type": "integer", "minimum": 100, "maximum": 50});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("minimum cannot be greater than maximum"));
+            }
+        }
+
+        #[test]
+        fn number_with_invalid_range_constraints() {
+            let schema = json!({"type": "number", "minimum": 10.5, "maximum": 5.2});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("minimum cannot be greater than maximum"));
+            }
+        }
+
+        #[test]
+        fn string_with_empty_enum() {
+            let schema = json!({"type": "string", "enum": []});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("enum array cannot be empty"));
             }
         }
     }
