@@ -1,8 +1,155 @@
 use std::fmt::Display;
 
+/// A trait for converting schema types to JSON Schema format.
+///
+/// This trait provides methods to convert drivel's internal schema representation
+/// to standard JSON Schema documents that conform to the JSON Schema specification.
+/// The generated schemas can be used for validation, documentation, or integration
+/// with other systems that understand JSON Schema.
+///
+/// # JSON Schema Specification
+///
+/// The generated schemas conform to JSON Schema Draft 2020-12 specification.
+/// See: https://json-schema.org/draft/2020-12/schema
+///
+/// # Examples
+///
+/// ## Basic usage with primitive types
+///
+/// ```
+/// use drivel::{ToJsonSchema, SchemaState, StringType, NumberType};
+/// use serde_json::json;
+///
+/// // String schema with length constraints
+/// let string_schema = SchemaState::String(StringType::Unknown {
+///     strings_seen: vec!["example".to_string()],
+///     chars_seen: vec!['e', 'x', 'a', 'm', 'p', 'l', 'e'],
+///     min_length: Some(3),
+///     max_length: Some(50),
+/// });
+///
+/// let json_schema = string_schema.to_json_schema();
+/// assert_eq!(json_schema, json!({
+///     "type": "string",
+///     "minLength": 3,
+///     "maxLength": 50
+/// }));
+///
+/// // Number schema with range constraints
+/// let number_schema = SchemaState::Number(NumberType::Integer { min: 1, max: 100 });
+/// let json_schema = number_schema.to_json_schema();
+/// assert_eq!(json_schema, json!({
+///     "type": "integer",
+///     "minimum": 1,
+///     "maximum": 100
+/// }));
+/// ```
+///
+/// ## Complete JSON Schema document
+///
+/// ```
+/// use drivel::{ToJsonSchema, SchemaState};
+/// use serde_json::json;
+///
+/// let schema = SchemaState::Boolean;
+/// let document = schema.to_json_schema_document();
+///
+/// assert_eq!(document["$schema"], "https://json-schema.org/draft/2020-12/schema");
+/// assert_eq!(document["title"], "Inferred Schema");
+/// assert_eq!(document["type"], "boolean");
+/// ```
+///
+/// ## Complex schemas with objects and arrays
+///
+/// ```
+/// use drivel::{ToJsonSchema, SchemaState, StringType, NumberType};
+/// use std::collections::HashMap;
+/// use serde_json::json;
+///
+/// let mut required = HashMap::new();
+/// required.insert("id".to_string(), SchemaState::Number(NumberType::Integer { min: 1, max: 1000 }));
+/// required.insert("name".to_string(), SchemaState::String(StringType::Unknown {
+///     strings_seen: vec!["test".to_string()],
+///     chars_seen: vec!['t', 'e', 's', 't'],
+///     min_length: Some(1),
+///     max_length: Some(100),
+/// }));
+///
+/// let object_schema = SchemaState::Object {
+///     required,
+///     optional: HashMap::new(),
+/// };
+///
+/// let json_schema = object_schema.to_json_schema();
+/// assert_eq!(json_schema["type"], "object");
+/// assert!(json_schema["required"].as_array().unwrap().contains(&json!("id")));
+/// assert!(json_schema["required"].as_array().unwrap().contains(&json!("name")));
+/// ```
 pub trait ToJsonSchema {
+    /// Converts the schema to a JSON Schema value.
+    ///
+    /// This method returns a `serde_json::Value` representing the JSON Schema
+    /// for this type. The returned value contains the core schema definition
+    /// without the document metadata (like `$schema`, `title`, etc.).
+    ///
+    /// # Returns
+    ///
+    /// A `serde_json::Value` containing the JSON Schema representation.
+    /// For primitive types, this includes type information and constraints.
+    /// For complex types like objects and arrays, this includes nested schemas
+    /// and structural information.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use drivel::{ToJsonSchema, SchemaState, StringType};
+    /// use serde_json::json;
+    ///
+    /// let schema = SchemaState::String(StringType::Email);
+    /// let json_schema = schema.to_json_schema();
+    ///
+    /// assert_eq!(json_schema, json!({
+    ///     "type": "string",
+    ///     "format": "email"
+    /// }));
+    /// ```
     fn to_json_schema(&self) -> serde_json::Value;
 
+    /// Converts the schema to a complete JSON Schema document.
+    ///
+    /// This method wraps the core schema from `to_json_schema()` in a complete
+    /// JSON Schema document with proper metadata including `$schema`, `title`,
+    /// and `description` fields. The result is a self-contained JSON Schema
+    /// document that can be used for validation or published as API documentation.
+    ///
+    /// # Returns
+    ///
+    /// A `serde_json::Value` containing a complete JSON Schema document
+    /// conforming to JSON Schema Draft 2020-12 specification.
+    ///
+    /// # Document Structure
+    ///
+    /// The generated document includes:
+    /// - `$schema`: References JSON Schema Draft 2020-12
+    /// - `title`: Set to "Inferred Schema"
+    /// - `description`: Indicates the schema was inferred by drivel
+    /// - All properties from the core schema
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use drivel::{ToJsonSchema, SchemaState, StringType};
+    /// use serde_json::json;
+    ///
+    /// let schema = SchemaState::String(StringType::UUID);
+    /// let document = schema.to_json_schema_document();
+    ///
+    /// assert_eq!(document["$schema"], "https://json-schema.org/draft/2020-12/schema");
+    /// assert_eq!(document["title"], "Inferred Schema");
+    /// assert_eq!(document["description"], "Schema inferred by drivel from sample data");
+    /// assert_eq!(document["type"], "string");
+    /// assert_eq!(document["format"], "uuid");
+    /// ```
     fn to_json_schema_document(&self) -> serde_json::Value {
         let mut doc = serde_json::json!({
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -20,21 +167,170 @@ pub trait ToJsonSchema {
     }
 }
 
+/// Represents specialized string types that can be inferred from sample data.
+///
+/// This enum captures semantic information about strings beyond the basic string type,
+/// allowing for more precise schema generation and validation. The inference engine
+/// analyzes string patterns to determine the most specific type that applies.
+///
+/// # Type Inference Strategy
+///
+/// String types are inferred in order of specificity:
+/// 1. **Specialized formats** (UUID, Email, URL, etc.) - checked first
+/// 2. **Date/time formats** - ISO dates and RFC formats
+/// 3. **Enum detection** - when all values match a small set of distinct strings
+/// 4. **Unknown** - fallback for general strings with length constraints
+///
+/// # Examples
+///
+/// ```
+/// use drivel::{StringType, ToJsonSchema};
+/// use serde_json::json;
+/// use std::collections::HashSet;
+///
+/// // UUID detection
+/// let uuid_type = StringType::UUID;
+/// assert_eq!(uuid_type.to_json_schema(), json!({
+///     "type": "string",
+///     "format": "uuid"
+/// }));
+///
+/// // Email detection
+/// let email_type = StringType::Email;
+/// assert_eq!(email_type.to_json_schema(), json!({
+///     "type": "string",
+///     "format": "email"
+/// }));
+///
+/// // Enum detection
+/// let enum_variants = ["red", "green", "blue"]
+///     .iter()
+///     .map(|s| s.to_string())
+///     .collect::<HashSet<_>>();
+/// let enum_type = StringType::Enum { variants: enum_variants };
+/// let schema = enum_type.to_json_schema();
+/// assert_eq!(schema["type"], "string");
+/// assert!(schema["enum"].is_array());
+/// ```
 #[derive(PartialEq, Debug)]
 pub enum StringType {
+    /// General string type with length constraints and character analysis.
+    ///
+    /// This variant is used when no specific string format can be detected.
+    /// It maintains tracking information for potential pattern detection and
+    /// length constraints derived from the sample data.
+    ///
+    /// # Fields
+    ///
+    /// * `strings_seen` - Sample strings encountered during inference
+    /// * `chars_seen` - Individual characters found across all samples
+    /// * `min_length` - Minimum string length observed (None if no data)
+    /// * `max_length` - Maximum string length observed (None if no data)
+    ///
+    /// # JSON Schema Output
+    ///
+    /// Generates a JSON Schema with `type: "string"` and optional `minLength`/`maxLength` constraints.
     Unknown {
         strings_seen: Vec<String>,
         chars_seen: Vec<char>,
         min_length: Option<usize>,
         max_length: Option<usize>,
     },
+
+    /// ISO 8601 date format (YYYY-MM-DD).
+    ///
+    /// Detected when strings match the ISO 8601 date pattern.
+    /// Maps to JSON Schema `format: "date"`.
+    ///
+    /// # Examples
+    /// - "2023-12-25"
+    /// - "1995-01-01"
     IsoDate,
+
+    /// RFC 2822 datetime format.
+    ///
+    /// Detected when strings match RFC 2822 datetime patterns.
+    /// Uses custom extension `x-drivel-type: "datetime-rfc2822"` since
+    /// this format is not part of standard JSON Schema formats.
+    ///
+    /// # Examples
+    /// - "Mon, 25 Dec 2023 10:30:00 +0000"
+    /// - "Fri, 01 Jan 1995 12:00:00 GMT"
     DateTimeRFC2822,
+
+    /// ISO 8601 datetime format with timezone information.
+    ///
+    /// Detected when strings match ISO 8601 datetime patterns.
+    /// Maps to JSON Schema `format: "date-time"`.
+    ///
+    /// # Examples
+    /// - "2023-12-25T10:30:00Z"
+    /// - "1995-01-01T12:00:00+02:00"
     DateTimeISO8601,
+
+    /// Universally Unique Identifier format.
+    ///
+    /// Detected when strings match UUID patterns (with or without hyphens).
+    /// Maps to JSON Schema `format: "uuid"`.
+    ///
+    /// # Examples
+    /// - "550e8400-e29b-41d4-a716-446655440000"
+    /// - "6ba7b8109dad11d180b400c04fd430c8"
     UUID,
+
+    /// Email address format.
+    ///
+    /// Detected when strings match email address patterns.
+    /// Maps to JSON Schema `format: "email"`.
+    ///
+    /// # Examples
+    /// - "user@example.com"
+    /// - "test.email+tag@domain.org"
     Email,
+
+    /// URL/URI format.
+    ///
+    /// Detected when strings match URL patterns with valid schemes.
+    /// Maps to JSON Schema `format: "uri"`.
+    ///
+    /// # Examples
+    /// - "https://example.com/path"
+    /// - "ftp://files.example.com/document.pdf"
     Url,
+
+    /// Hostname format.
+    ///
+    /// Detected when strings match hostname patterns.
+    /// Maps to JSON Schema `format: "hostname"` with custom extension
+    /// `x-drivel-type: "hostname"`.
+    ///
+    /// # Examples
+    /// - "example.com"
+    /// - "api.service.internal"
     Hostname,
+
+    /// Enumerated string values with a finite set of variants.
+    ///
+    /// Detected when all observed string values belong to a small,
+    /// distinct set that suggests enumeration rather than free-form text.
+    /// The detection algorithm considers both the number of unique values
+    /// and the ratio of unique values to total samples.
+    ///
+    /// # Fields
+    ///
+    /// * `variants` - Set of all distinct string values observed
+    ///
+    /// # JSON Schema Output
+    ///
+    /// Generates a JSON Schema with `type: "string"` and an `enum` array
+    /// containing all observed variants.
+    ///
+    /// # Detection Criteria
+    ///
+    /// Strings are classified as enum when:
+    /// - The number of unique values is small relative to total samples
+    /// - The uniqueness ratio suggests a closed set rather than open text
+    /// - Sample size is sufficient to make a confident determination
     Enum {
         variants: std::collections::HashSet<String>,
     },
@@ -80,9 +376,104 @@ impl Display for StringType {
     }
 }
 
+/// Represents numeric types with range constraints inferred from sample data.
+///
+/// This enum distinguishes between integer and floating-point numbers,
+/// maintaining range information derived from the observed sample values.
+/// The inference engine automatically determines the most appropriate
+/// numeric type based on the presence of decimal points and fractional parts.
+///
+/// # Type Detection Strategy
+///
+/// Numbers are classified as:
+/// 1. **Integer** - when all observed values are whole numbers
+/// 2. **Float** - when any observed value contains a decimal point or fractional part
+///
+/// Range constraints (min/max) are determined from the actual values
+/// encountered during schema inference, providing tight bounds for validation.
+///
+/// # JSON Schema Mapping
+///
+/// - `Integer` maps to JSON Schema `type: "integer"`
+/// - `Float` maps to JSON Schema `type: "number"`
+///
+/// Both types include `minimum` and `maximum` constraints derived from sample data.
+///
+/// # Examples
+///
+/// ```
+/// use drivel::{NumberType, ToJsonSchema};
+/// use serde_json::json;
+///
+/// // Integer with range constraints
+/// let int_type = NumberType::Integer { min: 1, max: 100 };
+/// assert_eq!(int_type.to_json_schema(), json!({
+///     "type": "integer",
+///     "minimum": 1,
+///     "maximum": 100
+/// }));
+///
+/// // Float with range constraints
+/// let float_type = NumberType::Float { min: 0.5, max: 99.9 };
+/// assert_eq!(float_type.to_json_schema(), json!({
+///     "type": "number",
+///     "minimum": 0.5,
+///     "maximum": 99.9
+/// }));
+/// ```
 #[derive(PartialEq, Debug)]
 pub enum NumberType {
+    /// Integer numbers with minimum and maximum value constraints.
+    ///
+    /// This variant represents whole numbers (positive, negative, or zero)
+    /// with range bounds derived from the observed sample data.
+    /// All values in the sample set must be integers for this type to be selected.
+    ///
+    /// # Fields
+    ///
+    /// * `min` - Minimum integer value observed in the sample data
+    /// * `max` - Maximum integer value observed in the sample data
+    ///
+    /// # JSON Schema Output
+    ///
+    /// Generates a JSON Schema with:
+    /// - `type: "integer"`
+    /// - `minimum: <min_value>`
+    /// - `maximum: <max_value>`
+    ///
+    /// # Range Behavior
+    ///
+    /// When min equals max, the schema constrains the value to a single allowed integer.
+    /// This effectively creates a constant value constraint.
     Integer { min: i64, max: i64 },
+
+    /// Floating-point numbers with minimum and maximum value constraints.
+    ///
+    /// This variant represents decimal numbers with range bounds derived
+    /// from the observed sample data. If any value in the sample contains
+    /// a decimal point or fractional part, the entire field is classified as Float.
+    ///
+    /// # Fields
+    ///
+    /// * `min` - Minimum floating-point value observed in the sample data
+    /// * `max` - Maximum floating-point value observed in the sample data
+    ///
+    /// # JSON Schema Output
+    ///
+    /// Generates a JSON Schema with:
+    /// - `type: "number"`
+    /// - `minimum: <min_value>`
+    /// - `maximum: <max_value>`
+    ///
+    /// # Range Behavior
+    ///
+    /// When min equals max, the schema constrains the value to a single allowed number.
+    /// This effectively creates a constant value constraint.
+    ///
+    /// # Precision Note
+    ///
+    /// Float ranges use f64 precision. Be aware of potential floating-point
+    /// precision issues when working with very large numbers or high-precision decimals.
     Float { min: f64, max: f64 },
 }
 
