@@ -2,6 +2,11 @@ use crate::schema::{NumberType, SchemaState, StringType};
 use serde_json::{Map, Value};
 use std::fmt;
 
+type ObjectProperties = (
+    std::collections::HashMap<String, SchemaState>,
+    std::collections::HashMap<String, SchemaState>,
+);
+
 #[derive(Debug)]
 pub enum ParseSchemaError {
     InvalidSchema(String),
@@ -422,13 +427,7 @@ fn parse_required_field_names(
 fn parse_object_properties(
     properties: &Map<String, Value>,
     required_names: &std::collections::HashSet<String>,
-) -> Result<
-    (
-        std::collections::HashMap<String, SchemaState>,
-        std::collections::HashMap<String, SchemaState>,
-    ),
-    ParseSchemaError,
-> {
+) -> Result<ObjectProperties, ParseSchemaError> {
     let mut required_fields = std::collections::HashMap::new();
     let mut optional_fields = std::collections::HashMap::new();
 
@@ -810,18 +809,18 @@ mod tests {
 
         #[test]
         fn parse_number_with_extreme_exclusive_maximum() {
-            let schema = json!({"type": "number", "exclusiveMaximum": 1.7976931348623157e+308});
+            let schema = json!({"type": "number", "exclusiveMaximum": f64::MAX});
             let result = parse_json_schema(&schema);
             // Should parse successfully without crashing
-            assert_float_constraints(result, f64::NEG_INFINITY, 1.7976931348623157e+308);
+            assert_float_constraints(result, f64::NEG_INFINITY, f64::MAX);
         }
 
         #[test]
         fn parse_number_with_extreme_exclusive_minimum() {
-            let schema = json!({"type": "number", "exclusiveMinimum": -1.7976931348623157e+308});
+            let schema = json!({"type": "number", "exclusiveMinimum": f64::MIN});
             let result = parse_json_schema(&schema);
             // Should parse successfully without crashing
-            assert_float_constraints(result, -1.7976931348623157e+308, f64::INFINITY);
+            assert_float_constraints(result, f64::MIN, f64::INFINITY);
         }
 
         #[test]

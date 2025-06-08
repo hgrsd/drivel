@@ -63,10 +63,10 @@ pub(crate) fn infer_string_type(s: &str) -> StringType {
         }
     }
 
-    return StringType::Unknown {
+    StringType::Unknown {
         strings_seen: vec![s.to_owned()],
         chars_seen: s.chars().collect(),
         min_length: Some(s.len()),
         max_length: Some(s.len()),
-    };
+    }
 }
