@@ -567,32 +567,27 @@ fn to_string_pretty_inner(schema_state: &SchemaState, depth: usize) -> String {
             let indent = 2 + 2 * depth;
             let indent_str = " ".repeat(indent);
             let indent_str_close = " ".repeat(indent - 2);
-            let mut combined = String::new();
-            for (k, v) in required {
-                combined.push_str(
-                    format!(
-                        "{}\"{}\": {},\n",
-                        indent_str,
-                        k,
-                        to_string_pretty_inner(v, depth + 1)
-                    )
-                    .as_str(),
-                );
-            }
 
-            for (k, v) in optional {
-                combined.push_str(
-                    format!(
-                        "{}\"{}\": optional {},\n",
-                        indent_str,
-                        k,
-                        to_string_pretty_inner(v, depth + 1)
-                    )
-                    .as_str(),
-                );
-            }
-            combined.pop(); // removes last \n
-            combined.pop(); // removes trailing comma
+            let required_fields = required.iter().map(|(k, v)| {
+                format!(
+                    "{}\"{}\": {}",
+                    indent_str,
+                    k,
+                    to_string_pretty_inner(v, depth + 1)
+                )
+            });
+
+            let optional_fields = optional.iter().map(|(k, v)| {
+                format!(
+                    "{}\"{}\": optional {}",
+                    indent_str,
+                    k,
+                    to_string_pretty_inner(v, depth + 1)
+                )
+            });
+
+            let all_fields: Vec<String> = required_fields.chain(optional_fields).collect();
+            let combined = all_fields.join(",\n");
 
             format!("{{\n{}\n{}}}", combined, indent_str_close)
         }
