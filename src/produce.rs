@@ -82,12 +82,12 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                         // otherwise we use the fact that we have collected all characters seen
                         // to generate a random string with a similar character distribution to the
                         // input data.
-                        let mut s = String::with_capacity(take_n);
-                        for _ in 0..take_n {
-                            let idx = thread_rng().gen_range(0..chars_seen.len());
-                            s.push(chars_seen[idx]);
-                        }
-                        s
+                        (0..take_n)
+                            .map(|_| {
+                                let idx = thread_rng().gen_range(0..chars_seen.len());
+                                chars_seen[idx]
+                            })
+                            .collect()
                     }
                 }
                 StringType::Enum { variants } => {
@@ -112,7 +112,7 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
                     // Handle infinite bounds and very large ranges safely
                     let safe_min = if min.is_infinite() { -1e10 } else { min };
                     let safe_max = if max.is_infinite() { 1e10 } else { max };
-                    
+
                     // Check if the range would cause overflow
                     let range_size = safe_max - safe_min;
                     if !range_size.is_finite() || range_size > 1e15 {
