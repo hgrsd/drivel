@@ -1,5 +1,6 @@
 use crate::{infer_string::infer_string_type, NumberType, SchemaState, StringType};
 use rayon::prelude::*;
+use std::cmp;
 
 pub struct EnumInference {
     /// The maximum ratio of unique values to total values in a collection of strings for it to be considered an enum.
@@ -10,22 +11,6 @@ pub struct EnumInference {
 
 pub struct InferenceOptions {
     pub enum_inference: Option<EnumInference>,
-}
-
-fn min<T: PartialOrd>(left: T, right: T) -> T {
-    if left < right {
-        left
-    } else {
-        right
-    }
-}
-
-fn max<T: PartialOrd>(left: T, right: T) -> T {
-    if left > right {
-        left
-    } else {
-        right
-    }
 }
 
 fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
@@ -52,7 +37,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
         ) => {
             let min_length = match (min_length, second_min_length) {
                 (Some(min_length), Some(second_min_length)) => {
-                    Some(min(min_length, second_min_length))
+                    Some(cmp::min(min_length, second_min_length))
                 }
                 (Some(min_length), None) => Some(min_length),
                 (None, Some(second_min_length)) => Some(second_min_length),
@@ -61,7 +46,7 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
 
             let max_length = match (max_length, second_max_length) {
                 (Some(max_length), Some(second_max_length)) => {
-                    Some(max(max_length, second_max_length))
+                    Some(cmp::max(max_length, second_max_length))
                 }
                 (Some(max_length), None) => Some(max_length),
                 (None, Some(second_max_length)) => Some(second_max_length),
@@ -106,8 +91,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max: second_max,
             }),
         ) => SchemaState::Number(NumberType::Float {
-            min: min(first_min, second_min),
-            max: max(first_max, second_max),
+            min: first_min.min(second_min),
+            max: first_max.max(second_max),
         }),
 
         (
@@ -120,8 +105,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max: second_max,
             }),
         ) => SchemaState::Number(NumberType::Float {
-            min: min(first_min, second_min as f64),
-            max: max(first_max, second_max as f64),
+            min: first_min.min(second_min as f64),
+            max: first_max.max(second_max as f64),
         }),
 
         (
@@ -134,8 +119,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max: second_max,
             }),
         ) => SchemaState::Number(NumberType::Float {
-            min: min(first_min as f64, second_min),
-            max: max(first_max as f64, second_max),
+            min: (first_min as f64).min(second_min),
+            max: (first_max as f64).max(second_max),
         }),
 
         (
@@ -148,8 +133,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 max: second_max,
             }),
         ) => SchemaState::Number(NumberType::Integer {
-            min: min(first_min, second_min),
-            max: max(first_max, second_max),
+            min: cmp::min(first_min, second_min),
+            max: cmp::max(first_max, second_max),
         }),
 
         // --- Boolean merging ---
@@ -168,8 +153,8 @@ fn merge(initial: SchemaState, new: SchemaState) -> SchemaState {
                 schema: second_schema,
             },
         ) => {
-            let min_length = min(min_length, second_min_length);
-            let max_length = max(max_length, second_max_length);
+            let min_length = cmp::min(min_length, second_min_length);
+            let max_length = cmp::max(max_length, second_max_length);
             let schema = Box::new(merge(*schema, *second_schema));
             SchemaState::Array {
                 min_length,
