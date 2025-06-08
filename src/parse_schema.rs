@@ -138,9 +138,7 @@ fn parse_nullable_type(
 fn try_parse_nullable_anyof_oneof(
     schema_array: &Value,
 ) -> Result<Option<SchemaState>, ParseSchemaError> {
-    let array = schema_array.as_array().ok_or_else(|| {
-        ParseSchemaError::InvalidSchema("anyOf/oneOf must be an array".to_string())
-    })?;
+    let array = require_array(schema_array, "anyOf/oneOf")?;
 
     if array.len() != 2 {
         return Ok(None); // Not a simple nullable pattern
@@ -150,9 +148,7 @@ fn try_parse_nullable_anyof_oneof(
     let mut type_schema = None;
 
     for item in array {
-        let item_obj = item.as_object().ok_or_else(|| {
-            ParseSchemaError::InvalidSchema("anyOf/oneOf items must be objects".to_string())
-        })?;
+        let item_obj = require_object(item, "anyOf/oneOf items")?;
 
         if let Some(type_field) = item_obj.get("type") {
             if let Some(type_str) = type_field.as_str() {
@@ -232,9 +228,7 @@ fn parse_string_with_format(
     min_length: Option<usize>,
     max_length: Option<usize>,
 ) -> Result<SchemaState, ParseSchemaError> {
-    let format_str = format_value.as_str().ok_or_else(|| {
-        ParseSchemaError::InvalidSchema("Format field must be a string".to_string())
-    })?;
+    let format_str = require_string(format_value, "Format field")?;
 
     match format_str {
         "email" => Ok(SchemaState::String(StringType::Email)),
@@ -266,9 +260,7 @@ fn create_unknown_string_type(min_length: Option<usize>, max_length: Option<usiz
 }
 
 fn parse_string_enum(enum_value: &Value) -> Result<SchemaState, ParseSchemaError> {
-    let enum_array = enum_value.as_array().ok_or_else(|| {
-        ParseSchemaError::InvalidSchema("Enum field must be an array".to_string())
-    })?;
+    let enum_array = require_array(enum_value, "Enum field")?;
 
     // Validate that enum array is not empty
     if enum_array.is_empty() {
@@ -280,9 +272,7 @@ fn parse_string_enum(enum_value: &Value) -> Result<SchemaState, ParseSchemaError
     let mut variants = std::collections::HashSet::new();
 
     for item in enum_array {
-        let string_value = item.as_str().ok_or_else(|| {
-            ParseSchemaError::InvalidSchema("All enum values must be strings".to_string())
-        })?;
+        let string_value = require_string(item, "All enum values")?;
         variants.insert(string_value.to_string());
     }
 
@@ -384,13 +374,7 @@ fn warn_about_unsupported_number_features(schema_obj: &Map<String, Value>) {
 
 fn parse_object_type(schema_obj: &Map<String, Value>) -> Result<SchemaState, ParseSchemaError> {
     let empty_map = serde_json::Map::new();
-    let properties = if let Some(props) = schema_obj.get("properties") {
-        props.as_object().ok_or_else(|| {
-            ParseSchemaError::InvalidSchema("properties must be an object".to_string())
-        })?
-    } else {
-        &empty_map
-    };
+    let properties = get_object_field(schema_obj, "properties")?.unwrap_or(&empty_map);
 
     let required_names = parse_required_field_names(schema_obj)?;
     let (required_fields, optional_fields) = parse_object_properties(properties, &required_names)?;
@@ -407,15 +391,11 @@ fn parse_required_field_names(
     schema_obj: &Map<String, Value>,
 ) -> Result<std::collections::HashSet<String>, ParseSchemaError> {
     if let Some(required) = schema_obj.get("required") {
-        let arr = required.as_array().ok_or_else(|| {
-            ParseSchemaError::InvalidSchema("required must be an array".to_string())
-        })?;
+        let arr = require_array(required, "required")?;
 
         let mut names = std::collections::HashSet::new();
         for item in arr {
-            let name = item.as_str().ok_or_else(|| {
-                ParseSchemaError::InvalidSchema("required field names must be strings".to_string())
-            })?;
+            let name = require_string(item, "required field names")?;
             names.insert(name.to_string());
         }
         Ok(names)
@@ -500,6 +480,42 @@ fn parse_optional_usize_field(
     } else {
         Ok(None)
     }
+}
+
+// Functional validation combinators
+
+fn get_object_field<'a>(
+    obj: &'a Map<String, Value>,
+    key: &str,
+) -> Result<Option<&'a Map<String, Value>>, ParseSchemaError> {
+    obj.get(key)
+        .map(|v| {
+            v.as_object().ok_or_else(|| {
+                ParseSchemaError::InvalidSchema(format!("{} must be an object", key))
+            })
+        })
+        .transpose()
+}
+
+fn require_array<'a>(value: &'a Value, context: &str) -> Result<&'a Vec<Value>, ParseSchemaError> {
+    value
+        .as_array()
+        .ok_or_else(|| ParseSchemaError::InvalidSchema(format!("{} must be an array", context)))
+}
+
+fn require_object<'a>(
+    value: &'a Value,
+    context: &str,
+) -> Result<&'a Map<String, Value>, ParseSchemaError> {
+    value
+        .as_object()
+        .ok_or_else(|| ParseSchemaError::InvalidSchema(format!("{} must be an object", context)))
+}
+
+fn require_string<'a>(value: &'a Value, context: &str) -> Result<&'a str, ParseSchemaError> {
+    value
+        .as_str()
+        .ok_or_else(|| ParseSchemaError::InvalidSchema(format!("{} must be a string", context)))
 }
 
 fn warn_about_unsupported_array_features(schema_obj: &Map<String, Value>) {
