@@ -454,12 +454,16 @@ mod tests {
 
     use super::*;
 
+    fn no_enum_options() -> InferenceOptions {
+        InferenceOptions {
+            enum_inference: None,
+        }
+    }
+
     #[test]
     fn infers_null() {
         let input = json!(null);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::Null)
@@ -468,9 +472,7 @@ mod tests {
     #[test]
     fn infers_string_unknown_type() {
         let input = json!("foo");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -487,9 +489,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date() {
         let input = json!("2013-01-12");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::IsoDate))
@@ -498,9 +498,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_2822() {
         let input = json!("Thu, 18 Mar 2021 10:37:31 +0000");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeRFC2822))
@@ -509,9 +507,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_3339_offset() {
         let input = json!("2013-01-12T00:00:00.000+00:00");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
@@ -520,9 +516,7 @@ mod tests {
     #[test]
     fn infers_string_iso_date_time_rfc_3339_utc() {
         let input = json!("2013-01-12T00:00:00.000Z");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::DateTimeISO8601))
@@ -531,9 +525,7 @@ mod tests {
     #[test]
     fn infers_string_uuid() {
         let input = json!("988c2c6d-df1b-4bb9-b837-6ba706c0b4ad");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::UUID))
@@ -542,9 +534,7 @@ mod tests {
     #[test]
     fn infers_string_email() {
         let input = json!("test@example.com");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::Email))
@@ -553,9 +543,7 @@ mod tests {
     #[test]
     fn infers_string_url() {
         let input = json!("https://somedomain.somehost.nl/somepage");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::Url))
@@ -564,9 +552,7 @@ mod tests {
     #[test]
     fn infers_string_hostname() {
         let input = json!("somehost.com");
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::String(StringType::Hostname))
@@ -575,9 +561,7 @@ mod tests {
     #[test]
     fn infers_number() {
         let input = json!(42);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -589,9 +573,7 @@ mod tests {
     #[test]
     fn infers_number_float() {
         let input = json!(42.0);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -606,9 +588,7 @@ mod tests {
     #[test]
     fn infers_boolean_true() {
         let input = json!(true);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::Boolean)
@@ -617,9 +597,7 @@ mod tests {
     #[test]
     fn infers_boolean_false() {
         let input = json!(false);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(schema, SchemaState::Boolean)
@@ -638,9 +616,7 @@ mod tests {
                 "string": "foo"
             }
         });
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -706,9 +682,7 @@ mod tests {
     #[test]
     fn infers_array_null() {
         let input = json!([null, null]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -724,9 +698,7 @@ mod tests {
     #[test]
     fn infers_array_string() {
         let input = json!(["foo", "barbar"]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -849,9 +821,7 @@ mod tests {
     #[test]
     fn infers_array_string_mixed() {
         let input = json!(["48f41410-2d97-4d54-8bfa-aa4e22acca01", "barbar"]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -866,15 +836,13 @@ mod tests {
                     max_length: Some(6),
                 }))
             }
-        );
+        )
     }
 
     #[test]
     fn infers_array_number() {
         let input = json!([100, 104]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -887,15 +855,13 @@ mod tests {
                     max: 104
                 }))
             }
-        );
+        )
     }
 
     #[test]
     fn infers_array_number_float() {
         let input = json!([100, 104.5]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -914,9 +880,7 @@ mod tests {
     #[test]
     fn infers_array_boolean() {
         let input = json!([true, false]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -947,9 +911,7 @@ mod tests {
                 "qux": true
             },
         ]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -1029,9 +991,7 @@ mod tests {
     #[test]
     fn infers_nested_array() {
         let input = json!([[true, false], [false]]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema(input, &options);
 
         assert_eq!(
@@ -1042,18 +1002,16 @@ mod tests {
                 schema: Box::new(SchemaState::Array {
                     min_length: 1,
                     max_length: 2,
-                    schema: Box::new(SchemaState::Boolean)
-                })
+                    schema: Box::new(SchemaState::Boolean),
+                }),
             }
-        );
+        )
     }
 
     #[test]
     fn infers_nullable_array() {
         let input_1 = json!(["foo", null]);
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema_1 = infer_schema(input_1, &options);
 
         let input_2 = json!([null, "foo"]);
@@ -1096,9 +1054,7 @@ mod tests {
                 "qux": true
             }),
         ];
-        let options = InferenceOptions {
-            enum_inference: None,
-        };
+        let options = no_enum_options();
         let schema = infer_schema_from_iter(input, &options);
         assert_eq!(
             schema,
