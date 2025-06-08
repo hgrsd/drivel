@@ -109,7 +109,18 @@ fn produce_inner(schema: &SchemaState, repeat_n: usize, current_depth: usize) ->
             }
             NumberType::Float { min, max } => {
                 let number = if min != max {
-                    thread_rng().gen_range(min..=max)
+                    // Handle infinite bounds and very large ranges safely
+                    let safe_min = if min.is_infinite() { -1e10 } else { min };
+                    let safe_max = if max.is_infinite() { 1e10 } else { max };
+                    
+                    // Check if the range would cause overflow
+                    let range_size = safe_max - safe_min;
+                    if !range_size.is_finite() || range_size > 1e15 {
+                        // Use a reasonable fallback range
+                        thread_rng().gen_range(0.0..=1000.0)
+                    } else {
+                        thread_rng().gen_range(safe_min..=safe_max)
+                    }
                 } else {
                     min
                 };

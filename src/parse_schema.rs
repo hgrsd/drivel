@@ -298,6 +298,17 @@ fn parse_number_type(
     } else {
         let min = min_value.unwrap_or(f64::NEG_INFINITY);
         let max = max_value.unwrap_or(f64::INFINITY);
+        
+        // Validate that finite ranges don't cause overflow in random generation
+        if min.is_finite() && max.is_finite() {
+            let range_size = max - min;
+            if !range_size.is_finite() || range_size <= 0.0 {
+                return Err(ParseSchemaError::ValidationFailed(
+                    "Invalid floating point range: range too large or invalid".to_string(),
+                ));
+            }
+        }
+        
         Ok(SchemaState::Number(NumberType::Float { min, max }))
     }
 }
@@ -305,8 +316,29 @@ fn parse_number_type(
 fn parse_number_constraints(
     schema_obj: &Map<String, Value>,
 ) -> Result<(Option<f64>, Option<f64>), ParseSchemaError> {
-    let min_value = parse_numeric_field(schema_obj, "minimum")?;
-    let max_value = parse_numeric_field(schema_obj, "maximum")?;
+    let mut min_value = parse_numeric_field(schema_obj, "minimum")?;
+    let mut max_value = parse_numeric_field(schema_obj, "maximum")?;
+    
+    // Handle exclusive bounds by treating them as inclusive bounds (with warning)
+    if let Some(exclusive_min) = parse_numeric_field(schema_obj, "exclusiveMinimum")? {
+        if min_value.is_some() {
+            return Err(ParseSchemaError::InvalidSchema(
+                "Cannot specify both minimum and exclusiveMinimum".to_string(),
+            ));
+        }
+        // Treat exclusive minimum as inclusive minimum (as indicated by warning)
+        min_value = Some(exclusive_min);
+    }
+    
+    if let Some(exclusive_max) = parse_numeric_field(schema_obj, "exclusiveMaximum")? {
+        if max_value.is_some() {
+            return Err(ParseSchemaError::InvalidSchema(
+                "Cannot specify both maximum and exclusiveMaximum".to_string(),
+            ));
+        }
+        // Treat exclusive maximum as inclusive maximum (as indicated by warning)
+        max_value = Some(exclusive_max);
+    }
     
     validate_min_max_constraint(
         min_value,
@@ -720,7 +752,87 @@ mod tests {
         fn parse_number_with_unsupported_constraints() {
             let schema = json!({"type": "number", "minimum": 5.0, "exclusiveMaximum": 10.0, "multipleOf": 2.5});
             let result = parse_json_schema(&schema);
-            assert_float_constraints(result, 5.0, f64::INFINITY);
+            assert_float_constraints(result, 5.0, 10.0);
+        }
+
+        #[test]
+        fn parse_number_with_exclusive_minimum() {
+            let schema = json!({"type": "number", "exclusiveMinimum": 1.5});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, 1.5, f64::INFINITY);
+        }
+
+        #[test]
+        fn parse_number_with_exclusive_maximum() {
+            let schema = json!({"type": "number", "exclusiveMaximum": 99.9});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, f64::NEG_INFINITY, 99.9);
+        }
+
+        #[test]
+        fn parse_number_with_exclusive_bounds() {
+            let schema = json!({"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 100.0});
+            let result = parse_json_schema(&schema);
+            assert_float_constraints(result, 0.0, 100.0);
+        }
+
+        #[test]
+        fn parse_integer_with_exclusive_bounds() {
+            let schema = json!({"type": "integer", "exclusiveMinimum": 5, "exclusiveMaximum": 20});
+            let result = parse_json_schema(&schema);
+            assert_integer_constraints(result, 5, 20);
+        }
+
+        #[test]
+        fn parse_number_with_both_minimum_and_exclusive_minimum() {
+            let schema = json!({"type": "number", "minimum": 5.0, "exclusiveMinimum": 10.0});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("Cannot specify both minimum and exclusiveMinimum"));
+            }
+        }
+
+        #[test]
+        fn parse_number_with_both_maximum_and_exclusive_maximum() {
+            let schema = json!({"type": "number", "maximum": 100.0, "exclusiveMaximum": 50.0});
+            let result = parse_json_schema(&schema);
+            assert!(result.is_err());
+            if let Err(err) = result {
+                assert!(err.to_string().contains("Cannot specify both maximum and exclusiveMaximum"));
+            }
+        }
+
+        #[test]
+        fn parse_number_with_extreme_exclusive_maximum() {
+            let schema = json!({"type": "number", "exclusiveMaximum": 1.7976931348623157e+308});
+            let result = parse_json_schema(&schema);
+            // Should parse successfully without crashing
+            assert_float_constraints(result, f64::NEG_INFINITY, 1.7976931348623157e+308);
+        }
+
+        #[test]
+        fn parse_number_with_extreme_exclusive_minimum() {
+            let schema = json!({"type": "number", "exclusiveMinimum": -1.7976931348623157e+308});
+            let result = parse_json_schema(&schema);
+            // Should parse successfully without crashing
+            assert_float_constraints(result, -1.7976931348623157e+308, f64::INFINITY);
+        }
+
+        #[test]
+        fn parse_integer_with_extreme_exclusive_maximum() {
+            let schema = json!({"type": "integer", "exclusiveMaximum": i64::MAX});
+            let result = parse_json_schema(&schema);
+            // Should parse successfully without crashing
+            assert_integer_constraints(result, i64::MIN, i64::MAX);
+        }
+
+        #[test]
+        fn parse_integer_with_extreme_exclusive_minimum() {
+            let schema = json!({"type": "integer", "exclusiveMinimum": i64::MIN});
+            let result = parse_json_schema(&schema);
+            // Should parse successfully without crashing
+            assert_integer_constraints(result, i64::MIN, i64::MAX);
         }
     }
 
